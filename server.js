@@ -1,77 +1,82 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 
-// Socket.ioの設定（ファイル送信用に上限を100MBに設定）
+// ファイル送信で容量制限でエラーにならないよう大きめに設定（約100MBまでOK）
 const io = new Server(server, {
-  maxHttpBufferSize: 1e8 // 100MB
+  maxHttpBufferSize: 1e8 
 });
 
-app.use(express.static(path.join(__dirname)));
+app.use(express.static(__dirname));
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// オンラインユーザー管理
-const users = {};       // socketId -> { userId, name }
-const userSockets = {}; // userId -> socketId
+// 接続中のユーザー情報
+const users = {};
 
 io.on('connection', (socket) => {
-  // ユーザーの初期登録
-  socket.on('register', (data) => {
-    const { userId, name } = data;
-    users[socket.id] = { userId, name };
-    userSockets[userId] = socket.id;
+  // ユーザー登録（名前の受信）
+  socket.on('register', (name) => {
+    users[socket.id] = {
+      id: socket.id,
+      name: name,
+      requestsSent: [],
+      friends: []
+    };
+    broadcastUserList();
   });
 
-  // フレンド検索・確認
-  socket.on('add-friend', (targetUserId, callback) => {
-    const targetSocketId = userSockets[targetUserId];
-    if (targetSocketId && users[targetSocketId]) {
-      callback({ success: true, name: users[targetSocketId].name });
-    } else {
-      callback({ success: false, message: '相手が見つかりません。コードを確認するか、相手がオンラインであることを確認してください。' });
+  // 友達申請
+  socket.on('send_friend_request', (targetId) => {
+    const sender = users[socket.id];
+    const target = users[targetId];
+
+    if (!sender || !target) return;
+
+    if (!sender.requestsSent.includes(targetId)) {
+      sender.requestsSent.push(targetId);
     }
+
+    // お互いに申請しあっているか確認（相互申請で友達成立）
+    if (target.requestsSent.includes(socket.id)) {
+      if (!sender.friends.includes(targetId)) sender.friends.push(targetId);
+      if (!target.friends.includes(socket.id)) target.friends.push(socket.id);
+    }
+
+    broadcastUserList();
   });
 
-  // メッセージ・ファイル送信
-  socket.on('send-message', (data) => {
-    const { toUserId, message, file, fileName, fileType } = data;
+  // メッセージ送信（テキスト＋ファイル）
+  socket.on('send_message', ({ toId, text, file }) => {
     const sender = users[socket.id];
     if (!sender) return;
 
-    const targetSocketId = userSockets[toUserId];
-    const payload = {
-      fromUserId: sender.userId,
+    const messageData = {
+      fromId: socket.id,
       fromName: sender.name,
-      message: message || '',
-      file: file || null,
-      fileName: fileName || null,
-      fileType: fileType || null,
+      toId: toId,
+      text: text,
+      file: file, // { name, type, data }
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    // 相手に送信
-    if (targetSocketId) {
-      io.to(targetSocketId).emit('receive-message', payload);
+    // 自分と送信相手だけにリアルタイム配信
+    socket.emit('receive_message', messageData);
+    if (toId && io.sockets.sockets.get(toId)) {
+      io.to(toId).emit('receive_message', messageData);
     }
-    // 自分側にも送信結果を返す
-    socket.emit('receive-message', { ...payload, isSelf: true });
   });
 
-  // 切断処理
+  // 切断時の処理
   socket.on('disconnect', () => {
-    const user = users[socket.id];
-    if (user) {
-      delete userSockets[user.userId];
-      delete users[socket.id];
-    }
+    delete users[socket.id];
+    broadcastUserList();
   });
+
+  function broadcastUserList() {
+    io.emit('user_list_update', Object.values(users));
+  }
 });
 
 const PORT = process.env.PORT || 3000;
