@@ -3,308 +3,258 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LINE風チャット</title>
-
-  <!-- タブアイコン（SVG画像：緑の吹き出しアイコン） -->
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306C755'><path d='M12 2C6.48 2 2 5.58 2 10c0 2.24 1.16 4.26 3.03 5.72L4 21l4.58-1.53C9.69 19.8 10.83 20 12 20c5.52 0 10-3.58 10-8s-4.48-8-10-8z'/></svg>">
-
+  <title>chat</title>
+  <!-- タブに表示される緑のチャットアイコン（ファビコン） -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306C755'><path d='M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/></svg>">
+  <script src="/socket.io/socket.io.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
     body { display: flex; height: 100vh; background-color: #f0f0f0; }
 
-    /* 初回名前入力モーダル */
-    #name-modal {
+    /* 初回名前入力用のモーダル */
+    #modal-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 1000;
+      background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000;
     }
-    .modal-content { background: white; padding: 25px; border-radius: 12px; text-align: center; width: 300px; }
-    .modal-content input { width: 100%; padding: 10px; margin: 15px 0; border: 1px solid #ccc; border-radius: 6px; }
-    .modal-content button { background: #06C755; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; }
+    .modal-box { background: white; padding: 25px; border-radius: 12px; text-align: center; width: 300px; }
+    .modal-box input { width: 100%; padding: 10px; margin: 15px 0; border: 1px solid #ccc; border-radius: 6px; }
+    .modal-box button { background: #06C755; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; }
 
-    /* サイドバー */
+    /* メイン画面構成 */
     #sidebar { width: 300px; background: #ffffff; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
-    .profile-card { background: #06C755; color: white; padding: 15px; }
-    .profile-card h3 { font-size: 16px; margin-bottom: 5px; }
-    .my-code { font-size: 12px; background: rgba(0,0,0,0.15); padding: 5px 8px; border-radius: 4px; display: inline-block; word-break: break-all; }
+    .sidebar-header { background: #242a38; color: white; padding: 15px; font-weight: bold; }
+    .user-list { flex: 1; overflow-y: auto; }
+    .user-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid #eee; }
+    .user-info { font-weight: bold; color: #333; }
+    .btn { padding: 6px 12px; border-radius: 15px; border: none; font-size: 12px; cursor: pointer; }
+    .btn-add { background: #06C755; color: white; }
+    .btn-pending { background: #ccc; color: #666; cursor: default; }
+    .btn-chat { background: #4a90e2; color: white; }
+
+    /* チャットエリア（LINE風） */
+    #chat-container { flex: 1; display: flex; flex-direction: column; background: #8cabd9; }
+    .chat-header { background: #242a38; color: white; padding: 15px; font-weight: bold; }
+    .message-area { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
     
-    .add-friend-box { padding: 10px; border-bottom: 1px solid #eee; display: flex; gap: 5px; }
-    .add-friend-box input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
-    .add-friend-box button { background: #06C755; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
-
-    .friend-list { flex: 1; overflow-y: auto; }
-    .friend-item { padding: 15px; border-bottom: 1px solid #f0f0f0; cursor: pointer; display: flex; align-items: center; }
-    .friend-item:hover { background: #f9f9f9; }
-    .friend-item.active { background: #e6f7ec; }
-
-    /* チャットメインエリア */
-    #chat-area { flex: 1; display: flex; flex-direction: column; background: #7494C0; }
-    #chat-header { background: white; padding: 15px; border-bottom: 1px solid #ddd; font-weight: bold; }
-    #messages { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-
-    /* 吹き出しスタイル (LINE風) */
-    .msg-row { display: flex; flex-direction: column; max-width: 70%; }
-    .msg-row.self { align-self: flex-end; align-items: flex-end; }
+    /* 吹き出しスタイル */
+    .msg-row { display: flex; flex-direction: column; max-width: 60%; }
+    .msg-row.me { align-self: flex-end; align-items: flex-end; }
     .msg-row.other { align-self: flex-start; align-items: flex-start; }
-
     .msg-sender { font-size: 11px; color: #fff; margin-bottom: 3px; }
-    .msg-bubble { padding: 10px 14px; border-radius: 15px; font-size: 14px; line-height: 1.4; word-break: break-all; white-space: pre-wrap; position: relative; }
-    .msg-row.self .msg-bubble { background: #95ec69; color: #000; border-top-right-radius: 2px; }
-    .msg-row.other .msg-bubble { background: #ffffff; color: #000; border-top-left-radius: 2px; }
-    .msg-time { font-size: 10px; color: #e0e0e0; margin-top: 2px; }
-    
-    .msg-media { max-width: 100%; max-height: 250px; border-radius: 8px; margin-top: 5px; }
+    .msg-bubble { padding: 10px 14px; border-radius: 15px; font-size: 14px; word-break: break-all; white-space: pre-wrap; line-height: 1.4; }
+    .me .msg-bubble { background: #85e249; color: #000; border-top-right-radius: 2px; }
+    .other .msg-bubble { background: #ffffff; color: #000; border-top-left-radius: 2px; }
+    .msg-time { font-size: 10px; color: #eee; margin-top: 2px; }
+    .msg-media { max-width: 250px; max-height: 250px; border-radius: 8px; margin-top: 5px; display: block; }
 
-    /* 入力エリア */
-    #input-area { background: white; padding: 10px; display: flex; gap: 10px; align-items: flex-end; }
-    #message-input { flex: 1; border: 1px solid #ddd; padding: 10px; border-radius: 8px; resize: none; height: 40px; font-size: 14px; outline: none; }
-    #file-btn { background: #f0f0f0; border: 1px solid #ccc; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 16px; }
-    #send-btn { background: #06C755; color: white; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-    #file-input { display: none; }
+    /* 入力フォーム */
+    .input-area { background: #ffffff; padding: 10px; display: flex; gap: 10px; align-items: center; }
+    .input-area textarea { flex: 1; height: 40px; border: 1px solid #ddd; border-radius: 6px; padding: 8px; resize: none; outline: none; }
+    .file-btn-label { font-size: 20px; cursor: pointer; padding: 0 5px; }
+    .file-btn-label input { display: none; }
+    .send-btn { background: #06C755; color: white; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; }
   </style>
 </head>
 <body>
 
-  <!-- 初回名前入力画面 -->
-  <div id="name-modal" style="display: none;">
-    <div class="modal-content">
-      <h2>名前の入力</h2>
-      <p style="font-size: 12px; color: #666; margin-top: 5px;">表示名を入力してください</p>
+  <!-- 初回名前入力ポップアップ -->
+  <div id="modal-overlay">
+    <div class="modal-box">
+      <h3>名前を入力してください</h3>
       <input type="text" id="username-input" placeholder="例: たろう">
       <button onclick="saveName()">はじめる</button>
     </div>
   </div>
 
-  <!-- サイドバー（フレンド一覧など） -->
+  <!-- 左側：オンラインユーザーリスト -->
   <div id="sidebar">
-    <div class="profile-card">
-      <h3 id="my-name-display">名前: --</h3>
-      <div class="my-code">認証コード: <span id="my-code-display">---</span></div>
-    </div>
-    <div class="add-friend-box">
-      <input type="text" id="friend-code-input" placeholder="相手の認証コードを入力">
-      <button onclick="addFriend()">追加</button>
-    </div>
-    <div class="friend-list" id="friend-list">
-      <!-- フレンド一覧がここに入ります -->
+    <div class="sidebar-header" id="my-name-display">ユーザー一覧</div>
+    <div class="user-list" id="user-list"></div>
+  </div>
+
+  <!-- 右側：トーク画面 -->
+  <div id="chat-container">
+    <div class="chat-header" id="chat-header">友達を選んでチャットを開始してください</div>
+    <div class="message-area" id="message-area"></div>
+    <div class="input-area">
+      <label class="file-btn-label" title="ファイルを添付">📎
+        <input type="file" id="file-input" onchange="sendFile()">
+      </label>
+      <textarea id="text-input" placeholder="メッセージを入力（制限なし）"></textarea>
+      <button class="send-btn" onclick="sendText()">送信</button>
     </div>
   </div>
 
-  <!-- チャットメイン画面 -->
-  <div id="chat-area">
-    <div id="chat-header">フレンドを選択してください</div>
-    <div id="messages"></div>
-    <div id="input-area">
-      <label id="file-btn" title="ファイルを選択">📎</label>
-      <input type="file" id="file-input">
-      <textarea id="message-input" placeholder="メッセージを入力（文字数制限なし）"></textarea>
-      <button id="send-btn" onclick="sendMessage()">送信</button>
-    </div>
-  </div>
-
-  <!-- Socket.io ライブラリ読込 -->
-  <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
+    let currentUserId = null;
+    let selectedChatPartnerId = null;
 
-    let myName = localStorage.getItem('chat_user_name');
-    let myCode = localStorage.getItem('chat_user_code');
-    let currentFriendId = null;
-    let friends = {}; // { userId: name }
-    let chatLogs = {}; // { userId: [messages] }
-    let selectedFile = null;
-
-    // ユーザーコードが無ければ自動生成 (例: ID-A1B2C3)
-    if (!myCode) {
-      myCode = 'ID-' + Math.random().toString(36).substring(2, 8).toUpperCase();
-      localStorage.setItem('chat_user_code', myCode);
-    }
-
-    // 初回表示処理
+    // 初回名前保存の確認
     window.onload = () => {
-      if (!myName) {
-        document.getElementById('name-modal').style.display = 'flex';
-      } else {
-        init();
+      const savedName = localStorage.getItem('chat_username');
+      if (savedName) {
+        document.getElementById('modal-overlay').style.display = 'none';
+        initUser(savedName);
       }
     };
 
     function saveName() {
-      const input = document.getElementById('username-input').value.trim();
-      if (input) {
-        myName = input;
-        localStorage.setItem('chat_user_name', myName);
-        document.getElementById('name-modal').style.display = 'none';
-        init();
-      }
+      const name = document.getElementById('username-input').value.trim();
+      if (!name) return alert('名前を入力してください');
+      localStorage.setItem('chat_username', name);
+      document.getElementById('modal-overlay').style.display = 'none';
+      initUser(name);
     }
 
-    function init() {
-      document.getElementById('my-name-display').innerText = myName;
-      document.getElementById('my-code-display').innerText = myCode;
-
-      // サーバーに自分を登録
-      socket.emit('register', { userId: myCode, name: myName });
+    function initUser(name) {
+      document.getElementById('my-name-display').innerText = `自分: ${name}`;
+      socket.emit('register', name);
     }
 
-    // フレンド追加処理
-    function addFriend() {
-      const codeInput = document.getElementById('friend-code-input');
-      const targetCode = codeInput.value.trim();
+    // ユーザーリスト更新
+    socket.on('user_list_update', (users) => {
+      currentUserId = socket.id;
+      const me = users.find(u => u.id === currentUserId);
+      const userListElement = document.getElementById('user-list');
+      userListElement.innerHTML = '';
 
-      if (!targetCode) return;
-      if (targetCode === myCode) {
-        alert("自分のコードは追加できません");
-        return;
-      }
+      users.forEach(user => {
+        if (user.id === currentUserId) return; // 自分はリストから除外
 
-      socket.emit('add-friend', targetCode, (res) => {
-        if (res.success) {
-          friends[targetCode] = res.name;
-          if (!chatLogs[targetCode]) chatLogs[targetCode] = [];
-          renderFriendList();
-          selectFriend(targetCode);
-          codeInput.value = '';
-        } else {
-          alert(res.message);
-        }
-      });
-    }
-
-    // フレンド一覧表示
-    function renderFriendList() {
-      const list = document.getElementById('friend-list');
-      list.innerHTML = '';
-      Object.keys(friends).forEach(code => {
         const div = document.createElement('div');
-        div.className = `friend-item ${code === currentFriendId ? 'active' : ''}`;
-        div.innerText = `${friends[code]} (${code})`;
-        div.onclick = () => selectFriend(code);
-        list.appendChild(div);
+        div.className = 'user-item';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'user-info';
+        nameSpan.innerText = user.name;
+        div.appendChild(nameSpan);
+
+        const isFriend = me && me.friends.includes(user.id);
+        const hasSentRequest = me && me.requestsSent.includes(user.id);
+
+        if (isFriend) {
+          const btn = document.createElement('button');
+          btn.className = 'btn btn-chat';
+          btn.innerText = 'チャット';
+          btn.onclick = () => selectPartner(user.id, user.name);
+          div.appendChild(btn);
+        } else if (hasSentRequest) {
+          const btn = document.createElement('button');
+          btn.className = 'btn btn-pending';
+          btn.innerText = '申請中';
+          div.appendChild(btn);
+        } else {
+          const btn = document.createElement('button');
+          btn.className = 'btn btn-add';
+          btn.innerText = '友達申請';
+          btn.onclick = () => socket.emit('send_friend_request', user.id);
+          div.appendChild(btn);
+        }
+
+        userListElement.appendChild(div);
       });
-    }
-
-    // トーク相手を選択
-    function selectFriend(code) {
-      currentFriendId = code;
-      document.getElementById('chat-header').innerText = `${friends[code]} とのトーク`;
-      renderFriendList();
-      renderMessages();
-    }
-
-    // ファイル選択処理
-    document.getElementById('file-btn').onclick = () => document.getElementById('file-input').click();
-    document.getElementById('file-input').onchange = (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          selectedFile = {
-            data: evt.target.result,
-            name: file.name,
-            type: file.type
-          };
-          alert(`ファイル「${file.name}」を添付しました。「送信」を押すと送られます。`);
-        };
-        reader.readAsDataURL(file);
-      }
-    };
-
-    // メッセージ送信
-    function sendMessage() {
-      if (!currentFriendId) {
-        alert("トークする相手を選択してください");
-        return;
-      }
-      const input = document.getElementById('message-input');
-      const text = input.value;
-
-      if (!text && !selectedFile) return;
-
-      socket.emit('send-message', {
-        toUserId: currentFriendId,
-        message: text,
-        file: selectedFile ? selectedFile.data : null,
-        fileName: selectedFile ? selectedFile.name : null,
-        fileType: selectedFile ? selectedFile.type : null
-      });
-
-      input.value = '';
-      selectedFile = null;
-      document.getElementById('file-input').value = '';
-    }
-
-    // メッセージ受信処理
-    socket.on('receive-message', (data) => {
-      const friendCode = data.isSelf ? currentFriendId : data.fromUserId;
-      
-      // 自動で相手をフレンド追加（まだリストにいない場合）
-      if (!friends[friendCode] && !data.isSelf) {
-        friends[friendCode] = data.fromName;
-        renderFriendList();
-      }
-
-      if (!chatLogs[friendCode]) chatLogs[friendCode] = [];
-      chatLogs[friendCode].push(data);
-
-      if (currentFriendId === friendCode) {
-        renderMessages();
-      }
     });
 
-    // メッセージ描画
-    function renderMessages() {
-      const container = document.getElementById('messages');
-      container.innerHTML = '';
-      const logs = chatLogs[currentFriendId] || [];
+    function selectPartner(id, name) {
+      selectedChatPartnerId = id;
+      document.getElementById('chat-header').innerText = `${name} とのチャット`;
+      document.getElementById('message-area').innerHTML = ''; // 画面切り替え時にクリア
+    }
 
-      logs.forEach(msg => {
-        const row = document.createElement('div');
-        row.className = `msg-row ${msg.isSelf ? 'self' : 'other'}`;
+    // メッセージ送信
+    function sendText() {
+      const input = document.getElementById('text-input');
+      const text = input.value;
+      if (!text || !selectedChatPartnerId) return;
 
+      socket.emit('send_message', {
+        toId: selectedChatPartnerId,
+        text: text,
+        file: null
+      });
+      input.value = '';
+    }
+
+    // ファイル送信（画像・動画・その他ファイル）
+    function sendFile() {
+      const fileInput = document.getElementById('file-input');
+      const file = fileInput.files[0];
+      if (!file || !selectedChatPartnerId) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        socket.emit('send_message', {
+          toId: selectedChatPartnerId,
+          text: '',
+          file: {
+            name: file.name,
+            type: file.type,
+            data: e.target.result
+          }
+        });
+        fileInput.value = '';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // メッセージ受信
+    socket.on('receive_message', (msg) => {
+      // 現在開いているチャット相手メッセージの場合のみ表示
+      if (msg.fromId !== selectedChatPartnerId && msg.toId !== selectedChatPartnerId) return;
+
+      const messageArea = document.getElementById('message-area');
+      const isMe = msg.fromId === currentUserId;
+
+      const row = document.createElement('div');
+      row.className = `msg-row ${isMe ? 'me' : 'other'}`;
+
+      if (!isMe) {
         const sender = document.createElement('div');
         sender.className = 'msg-sender';
         sender.innerText = msg.fromName;
+        row.appendChild(sender);
+      }
 
-        const bubble = document.createElement('div');
-        bubble.className = 'msg-bubble';
-        bubble.innerText = msg.message;
+      const bubble = document.createElement('div');
+      bubble.className = 'msg-bubble';
 
-        // ファイル描画（画像・動画・その他）
-        if (msg.file) {
-          if (msg.fileType.startsWith('image/')) {
-            const img = document.createElement('img');
-            img.src = msg.file;
-            img.className = 'msg-media';
-            bubble.appendChild(img);
-          } else if (msg.fileType.startsWith('video/')) {
-            const video = document.createElement('video');
-            video.src = msg.file;
-            video.controls = true;
-            video.className = 'msg-media';
-            bubble.appendChild(video);
-          } else {
-            const link = document.createElement('a');
-            link.href = msg.file;
-            link.download = msg.fileName;
-            link.innerText = `📁 ${msg.fileName} (ダウンロード)`;
-            link.style.display = 'block';
-            link.style.marginTop = '5px';
-            bubble.appendChild(link);
-          }
+      if (msg.text) {
+        bubble.innerText = msg.text;
+      }
+
+      if (msg.file) {
+        if (msg.file.type.startsWith('image/')) {
+          const img = document.createElement('img');
+          img.src = msg.file.data;
+          img.className = 'msg-media';
+          bubble.appendChild(img);
+        } else if (msg.file.type.startsWith('video/')) {
+          const video = document.createElement('video');
+          video.src = msg.file.data;
+          video.controls = true;
+          video.className = 'msg-media';
+          bubble.appendChild(video);
+        } else {
+          const a = document.createElement('a');
+          a.href = msg.file.data;
+          a.download = msg.file.name;
+          a.innerText = `📎 ${msg.file.name} をダウンロード`;
+          a.style.color = isMe ? '#000' : '#0066cc';
+          bubble.appendChild(a);
         }
+      }
 
-        const time = document.createElement('div');
-        time.className = 'msg-time';
-        time.innerText = msg.time;
+      row.appendChild(bubble);
 
-        if (!msg.isSelf) row.appendChild(sender);
-        row.appendChild(bubble);
-        row.appendChild(time);
-        container.appendChild(row);
-      });
+      const time = document.createElement('div');
+      time.className = 'msg-time';
+      time.innerText = msg.time;
+      row.appendChild(time);
 
-      container.scrollTop = container.scrollHeight;
-    }
+      messageArea.appendChild(row);
+      messageArea.scrollTop = messageArea.scrollHeight;
+    });
   </script>
 </body>
 </html>
