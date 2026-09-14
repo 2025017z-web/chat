@@ -10,7 +10,6 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
     body { display: flex; height: 100vh; background-color: #f0f0f0; }
 
-    /* 初期名前入力 */
     #modal-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000;
@@ -19,7 +18,6 @@
     .modal-box input { width: 100%; padding: 10px; margin: 15px 0; border: 1px solid #ccc; border-radius: 6px; }
     .modal-box button { background: #06C755; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; }
 
-    /* サイドバー */
     #sidebar { width: 340px; background: #ffffff; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
     .sidebar-header { background: #242a38; color: white; padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; }
     .rename-btn { background: #4a90e2; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; }
@@ -38,17 +36,13 @@
     .btn-pending { background: #ccc; color: #666; cursor: default; }
     .btn-chat { background: #4a90e2; color: white; }
 
-    /* 管理者専用パネル（ユーザー毎） */
     .admin-controls { display: none; background: #fff0f0; padding: 5px; border-radius: 4px; border: 1px dashed red; gap: 4px; font-size: 11px; }
-    .admin-controls input { width: 70px; padding: 2px; }
     .admin-controls button { background: #d9534f; color: white; border: none; border-radius: 3px; padding: 2px 5px; cursor: pointer; }
 
-    /* 左下コード入力エリア */
-    .admin-code-area { padding: 10px; background: #1e222d; color: white; display: flex; gap: 5px; }
+    .admin-code-area { padding: 10px; background: #1e222d; color: white; display: flex; gap: 5px; align-items: center; justify-content: space-between; }
     .admin-code-area input { flex: 1; padding: 6px; border-radius: 4px; border: none; font-size: 12px; }
     .admin-code-area button { background: #e67e22; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
 
-    /* チャット画面 */
     #chat-container { flex: 1; display: flex; flex-direction: column; background: #8cabd9; }
     .chat-header { background: #242a38; color: white; padding: 15px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
     .admin-impersonate-select { display: none; background: #ffeaa7; padding: 4px; border-radius: 4px; font-size: 12px; color: #333; }
@@ -81,7 +75,6 @@
 </head>
 <body>
 
-  <!-- 初回名前入力ポップアップ -->
   <div id="modal-overlay">
     <div class="modal-box">
       <h3>名前を入力してください</h3>
@@ -90,7 +83,6 @@
     </div>
   </div>
 
-  <!-- 左側：サイドバー -->
   <div id="sidebar">
     <div class="sidebar-header">
       <span id="my-name-display">自分: -</span>
@@ -99,20 +91,24 @@
     
     <div class="user-list" id="user-list"></div>
 
-    <!-- 左下のコード入力欄（管理者コマンド） -->
-    <div class="admin-code-area">
+    <!-- 左下：コード入力欄（未認証時） -->
+    <div class="admin-code-area" id="admin-code-area">
       <input type="password" id="admin-code-input" placeholder="管理者コード">
       <button onclick="submitAdminCode()">実行</button>
     </div>
+
+    <!-- 左下：管理者モード終了エリア（認証時） -->
+    <div class="admin-code-area" id="admin-logout-area" style="display: none;">
+      <span style="font-size: 12px; color: #2ecc71; font-weight: bold;">👑 管理者モード有効</span>
+      <button onclick="logoutAdmin()" style="background: #e74c3c;">モード終了</button>
+    </div>
   </div>
 
-  <!-- 右側：チャット画面 -->
   <div id="chat-container">
     <div class="chat-header">
       <span id="chat-header-text">友達を選んでチャットを開始してください</span>
-      <!-- 管理者用のなりすまし切り替え -->
       <div class="admin-impersonate-select" id="admin-impersonate-box">
-        なりすまし送信: 
+        送信: 
         <select id="impersonate-user-select">
           <option value="">(自分として送信)</option>
         </select>
@@ -163,7 +159,6 @@
       socket.emit('register', { userId: myUserId, name: name });
     }
 
-    // 自分の名前を変更する
     function changeMyName() {
       const newName = prompt('新しい名前を入力してください:');
       if (newName && newName.trim()) {
@@ -173,24 +168,41 @@
       }
     }
 
-    // 管理者コードの送信
+    // 管理者コード送信
     function submitAdminCode() {
       const code = document.getElementById('admin-code-input').value;
       socket.emit('admin_auth', { code: code });
     }
 
+    // 👑 管理者モード終了処理
+    function logoutAdmin() {
+      socket.emit('admin_logout');
+    }
+
     socket.on('admin_auth_result', ({ success }) => {
       if (success) {
         isAdmin = true;
-        alert('👑 管理者モードが有効化されました');
+        document.getElementById('admin-code-area').style.display = 'none';
+        document.getElementById('admin-logout-area').style.display = 'flex';
         document.getElementById('admin-impersonate-box').style.display = 'block';
         updateUserListUI();
+        alert('👑 管理者モードを有効化しました');
       } else {
         alert('コードが正しくありません');
       }
     });
 
-    // ユーザーリスト更新
+    socket.on('admin_logout_result', () => {
+      isAdmin = false;
+      document.getElementById('admin-code-area').style.display = 'flex';
+      document.getElementById('admin-logout-area').style.display = 'none';
+      document.getElementById('admin-impersonate-box').style.display = 'none';
+      document.getElementById('impersonate-user-select').value = '';
+      document.getElementById('admin-code-input').value = '';
+      updateUserListUI();
+      alert('管理者モードを終了しました');
+    });
+
     socket.on('user_list_update', (users) => {
       cachedUsers = users;
       updateUserListUI();
@@ -201,7 +213,6 @@
       const userListElement = document.getElementById('user-list');
       userListElement.innerHTML = '';
 
-      // なりすましセレクトボックスの更新
       const impSelect = document.getElementById('impersonate-user-select');
       impSelect.innerHTML = '<option value="">(自分として送信)</option>';
 
@@ -244,7 +255,6 @@
         const isFriend = me && me.friends.includes(user.userId);
         const hasSentRequest = me && me.requestsSent.includes(user.userId);
 
-        // 管理者の場合は誰とでもチャット可能、一般は友達のみ
         if (isFriend || isAdmin) {
           const btn = document.createElement('button');
           btn.className = 'btn btn-chat';
@@ -266,12 +276,10 @@
 
         div.appendChild(rowMain);
 
-        // 👑 管理者操作コントロールパネル
         if (isAdmin && user.userId !== myUserId) {
           const adminDiv = document.createElement('div');
           adminDiv.className = 'admin-controls';
           adminDiv.style.display = 'flex';
-
           adminDiv.innerHTML = `
             <button onclick="adminRename('${user.userId}')">名前改変</button>
             <button onclick="adminBan('${user.userId}')">BAN</button>
@@ -283,23 +291,16 @@
       });
     }
 
-    // 👑 他人の名前を変更
     function adminRename(targetUserId) {
       const newName = prompt('新しい名前を入力（全員から見ても変わります）:');
-      if (newName) {
-        socket.emit('admin_rename_user', { targetUserId, newName });
-      }
+      if (newName) socket.emit('admin_rename_user', { targetUserId, newName });
     }
 
-    // 👑 使用禁止（BAN）にする
     function adminBan(targetUserId) {
       const minutes = prompt('何分間使用禁止にしますか？ (分単位):', '5');
-      if (minutes && !isNaN(minutes)) {
-        socket.emit('admin_ban_user', { targetUserId, minutes: parseFloat(minutes) });
-      }
+      if (minutes && !isNaN(minutes)) socket.emit('admin_ban_user', { targetUserId, minutes: parseFloat(minutes) });
     }
 
-    // トーク相手選択
     function selectPartner(partnerId, partnerName) {
       selectedChatPartnerId = partnerId;
       document.getElementById('chat-header-text').innerText = `${partnerName} とのチャット`;
@@ -307,7 +308,6 @@
       socket.emit('get_chat_history', { partnerId: partnerId });
     }
 
-    // チャット履歴の受領
     socket.on('chat_history', ({ partnerId, messages }) => {
       if (partnerId !== selectedChatPartnerId) return;
       const messageArea = document.getElementById('message-area');
@@ -317,7 +317,6 @@
       socket.emit('mark_as_read', { partnerId: selectedChatPartnerId });
     });
 
-    // 送信ボタン
     function sendText() {
       const input = document.getElementById('text-input');
       const text = input.value;
@@ -334,7 +333,6 @@
       input.value = '';
     }
 
-    // ファイル送信
     function sendFile() {
       const fileInput = document.getElementById('file-input');
       const file = fileInput.files[0];
@@ -355,9 +353,10 @@
       reader.readAsDataURL(file);
     }
 
-    // メッセージ受信
+    // メッセージ受信（送信直後の自分へも確実に反映）
     socket.on('receive_message', (msg) => {
       if (msg.fromUserId !== selectedChatPartnerId && msg.toUserId !== selectedChatPartnerId) return;
+
       renderMessage(msg);
       const messageArea = document.getElementById('message-area');
       messageArea.scrollTop = messageArea.scrollHeight;
@@ -377,7 +376,6 @@
       alert(msg);
     });
 
-    // 画面描画
     function renderMessage(msg) {
       const messageArea = document.getElementById('message-area');
       const isMe = msg.fromUserId === myUserId;
