@@ -7,14 +7,16 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 
-// 大容量ファイル送信対応（最大約100MB）
 const io = new Server(server, {
   maxHttpBufferSize: 1e8 
 });
 
 app.use(express.static(__dirname));
 
-// --- データのファイル保存（簡易データベース） ---
+// 管理者コードの設定（好きなコードに変更可能）
+const ADMIN_CODE = "admin123";
+
+// --- データ保存処理 ---
 const DATA_FILE = path.join(__dirname, 'chat_data.json');
 let db = { users: {}, messages: [] };
 
@@ -34,27 +36,35 @@ function saveData() {
   }
 }
 
-// オンライン中のソケット管理 (userId -> socketId)
-const onlineSockets = {};
+const onlineSockets = {}; // userId -> socketId
 
 io.on('connection', (socket) => {
 
-  // 1. ユーザー登録（固有のuserId）
+  // 1. ユーザー初期化
   socket.on('register', ({ userId, name }) => {
     socket.userId = userId;
     onlineSockets[userId] = socket.id;
 
     if (!db.users[userId]) {
-      db.users[userId] = { userId, name, friends: [], requestsSent: [] };
-    } else {
-      db.users[userId].name = name; // 名前更新対応
+      db.users[userId] = { userId, name, friends: [], requestsSent: [], bannedUntil: 0 };
     }
     saveData();
     broadcastUserList();
   });
 
-  // 2. 友達申請
+  // 2. 自分の名前変更
+  socket.on('change_name', ({ newName }) => {
+    const userId = socket.userId;
+    if (db.users[userId] && newName.trim()) {
+      db.users[userId].name = newName.trim();
+      saveData();
+      broadcastUserList();
+    }
+  });
+
+  // 3. 友達申請
   socket.on('send_friend_request', (targetUserId) => {
+    if (isBanned(socket.userId)) return;
     const senderId = socket.userId;
     const sender = db.users[senderId];
     const target = db.users[targetUserId];
@@ -65,7 +75,6 @@ io.on('connection', (socket) => {
       sender.requestsSent.push(targetUserId);
     }
 
-    // 相互申請なら友達成立
     if (target.requestsSent.includes(senderId)) {
       if (!sender.friends.includes(targetUserId)) sender.friends.push(targetUserId);
       if (!target.friends.includes(senderId)) target.friends.push(senderId);
@@ -75,28 +84,45 @@ io.on('connection', (socket) => {
     broadcastUserList();
   });
 
-  // 3. 過去のチャット履歴を取得
-  socket.on('get_chat_history', ({ partnerId }) => {
+  // 4. チャット履歴の取得（一般・管理者共通）
+  socket.on('get_chat_history', ({ partnerId, customFromId, customToId }) => {
     const myId = socket.userId;
-    if (!myId || !partnerId) return;
+    let u1 = myId;
+    let u2 = partnerId;
+
+    // 管理者が指定したペアを覗き見る場合
+    if (socket.isAdmin && customFromId && customToId) {
+      u1 = customFromId;
+      u2 = customToId;
+    }
 
     const history = db.messages.filter(m => 
-      (m.fromUserId === myId && m.toUserId === partnerId) ||
-      (m.fromUserId === partnerId && m.toUserId === myId)
+      (m.fromUserId === u1 && m.toUserId === u2) ||
+      (m.fromUserId === u2 && m.toUserId === u1)
     );
 
-    socket.emit('chat_history', { partnerId, messages: history });
+    socket.emit('chat_history', { partnerId: u2, messages: history });
   });
 
-  // 4. メッセージ送信
-  socket.on('send_message', ({ toUserId, text, file }) => {
-    const fromUserId = socket.userId;
-    const sender = db.users[fromUserId];
+  // 5. メッセージ送信（なりすまし機能含む）
+  socket.on('send_message', ({ toUserId, text, file, impersonateUserId }) => {
+    if (isBanned(socket.userId)) {
+      return socket.emit('error_message', '現在使用禁止（BAN）に設定されています。');
+    }
+
+    let actualSenderId = socket.userId;
+
+    // 管理者がなりすまし送信を行う場合
+    if (socket.isAdmin && impersonateUserId) {
+      actualSenderId = impersonateUserId;
+    }
+
+    const sender = db.users[actualSenderId];
     if (!sender || !toUserId) return;
 
     const msg = {
       id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-      fromUserId: fromUserId,
+      fromUserId: actualSenderId,
       fromName: sender.name,
       toUserId: toUserId,
       text: text,
@@ -108,17 +134,16 @@ io.on('connection', (socket) => {
     db.messages.push(msg);
     saveData();
 
-    // 自分に送信
-    socket.emit('receive_message', msg);
+    // 差出人と宛先に送信
+    const senderSocketId = onlineSockets[actualSenderId];
+    if (senderSocketId) io.to(senderSocketId).emit('receive_message', msg);
+    if (socket.isAdmin && socket.id !== senderSocketId) socket.emit('receive_message', msg);
 
-    // 相手がオンラインなら送信
     const targetSocketId = onlineSockets[toUserId];
-    if (targetSocketId) {
-      io.to(targetSocketId).emit('receive_message', msg);
-    }
+    if (targetSocketId) io.to(targetSocketId).emit('receive_message', msg);
   });
 
-  // 5. 既読をつける処理
+  // 6. 既読処理
   socket.on('mark_as_read', ({ partnerId }) => {
     const myId = socket.userId;
     if (!myId || !partnerId) return;
@@ -133,16 +158,51 @@ io.on('connection', (socket) => {
 
     if (updated) {
       saveData();
-      // 送信元（相手）へ「既読がついた」ことを通知
       const partnerSocketId = onlineSockets[partnerId];
-      if (partnerSocketId) {
-        io.to(partnerSocketId).emit('messages_read_notification', { readerId: myId });
-      }
+      if (partnerSocketId) io.to(partnerSocketId).emit('messages_read_notification', { readerId: myId });
       socket.emit('messages_read_notification', { readerId: partnerId });
     }
   });
 
-  // 切断
+  // --- 👑 管理者機能 ---
+
+  // A. 管理者認証
+  socket.on('admin_auth', ({ code }) => {
+    if (code === ADMIN_CODE) {
+      socket.isAdmin = true;
+      socket.emit('admin_auth_result', { success: true });
+    } else {
+      socket.emit('admin_auth_result', { success: false });
+    }
+  });
+
+  // B. 他人の名前を強制変更
+  socket.on('admin_rename_user', ({ targetUserId, newName }) => {
+    if (!socket.isAdmin) return;
+    if (db.users[targetUserId] && newName.trim()) {
+      db.users[targetUserId].name = newName.trim();
+      saveData();
+      broadcastUserList();
+    }
+  });
+
+  // C. 使用禁止（BAN）設定
+  socket.on('admin_ban_user', ({ targetUserId, minutes }) => {
+    if (!socket.isAdmin) return;
+    if (db.users[targetUserId]) {
+      const banTime = Date.now() + (minutes * 60 * 1000);
+      db.users[targetUserId].bannedUntil = banTime;
+      saveData();
+      broadcastUserList();
+      
+      const targetSocketId = onlineSockets[targetUserId];
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('error_message', `管理者により ${minutes} 分間使用禁止になりました。`);
+      }
+    }
+  });
+
+  // 切断処理
   socket.on('disconnect', () => {
     if (socket.userId) {
       delete onlineSockets[socket.userId];
@@ -151,11 +211,18 @@ io.on('connection', (socket) => {
   });
 
   function broadcastUserList() {
+    const now = Date.now();
     const userList = Object.values(db.users).map(u => ({
       ...u,
-      isOnline: !!onlineSockets[u.userId]
+      isOnline: !!onlineSockets[u.userId],
+      isBanned: u.bannedUntil > now
     }));
     io.emit('user_list_update', userList);
+  }
+
+  function isBanned(userId) {
+    const u = db.users[userId];
+    return u && u.bannedUntil > Date.now();
   }
 });
 
