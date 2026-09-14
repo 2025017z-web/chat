@@ -51,7 +51,7 @@ io.on('connection', (socket) => {
     broadcastUserList();
   });
 
-  // 2. 自分の名前変更
+  // 2. 名前変更
   socket.on('change_name', ({ newName }) => {
     const userId = socket.userId;
     if (db.users[userId] && newName.trim()) {
@@ -83,12 +83,18 @@ io.on('connection', (socket) => {
     broadcastUserList();
   });
 
-  // 4. チャット履歴の取得（ペア監視対応）
+  // 4. チャット履歴の取得
   socket.on('get_chat_history', ({ partnerId, userA, userB }) => {
+    // 報告用チャットの場合
+    if (partnerId === 'ADMIN_REPORT_ROOM') {
+      if (!socket.isAdmin) return;
+      const history = db.messages.filter(m => m.toUserId === 'ADMIN_REPORT_ROOM');
+      return socket.emit('chat_history', { partnerId: 'ADMIN_REPORT_ROOM', messages: history });
+    }
+
     let u1 = socket.userId;
     let u2 = partnerId;
 
-    // 管理者がペア指定で監視する場合
     if (socket.isAdmin && userA && userB) {
       u1 = userA;
       u2 = userB;
@@ -99,17 +105,16 @@ io.on('connection', (socket) => {
       (m.fromUserId === u2 && m.toUserId === u1)
     );
 
-    socket.emit('chat_history', { userA: u1, userB: u2, messages: history });
+    socket.emit('chat_history', { userA: u1, userB: u2, partnerId: u2, messages: history });
   });
 
-  // 5. メッセージ送信（なりすまし送信含む）
+  // 5. メッセージ送信
   socket.on('send_message', ({ toUserId, text, file, impersonateUserId }) => {
     if (isBanned(socket.userId)) {
       return socket.emit('error_message', '現在使用禁止（BAN）に設定されています。');
     }
 
     let actualSenderId = socket.userId;
-
     if (socket.isAdmin && impersonateUserId) {
       actualSenderId = impersonateUserId;
     }
@@ -131,28 +136,30 @@ io.on('connection', (socket) => {
     db.messages.push(msg);
     saveData();
 
-    // 送信者本人へ反映
+    // 報告用チャットの場合
+    if (toUserId === 'ADMIN_REPORT_ROOM') {
+      return io.emit('receive_message', msg);
+    }
+
     socket.emit('receive_message', msg);
 
-    // 受信者へ通知
     const targetSocketId = onlineSockets[toUserId];
     if (targetSocketId && targetSocketId !== socket.id) {
       io.to(targetSocketId).emit('receive_message', msg);
     }
 
-    // なりすまし元ユーザーへ通知
     const senderSocketId = onlineSockets[actualSenderId];
     if (senderSocketId && senderSocketId !== socket.id && senderSocketId !== targetSocketId) {
       io.to(senderSocketId).emit('receive_message', msg);
     }
 
-    broadcastUserList(); // 全体の会話ペア一覧更新のため
+    broadcastUserList();
   });
 
   // 6. 既読処理
   socket.on('mark_as_read', ({ partnerId, watchedUserA }) => {
     const myId = watchedUserA || socket.userId;
-    if (!myId || !partnerId) return;
+    if (!myId || !partnerId || partnerId === 'ADMIN_REPORT_ROOM') return;
 
     let updated = false;
     db.messages.forEach(m => {
@@ -168,6 +175,20 @@ io.on('connection', (socket) => {
       if (partnerSocketId) io.to(partnerSocketId).emit('messages_read_notification', { readerId: myId });
       socket.emit('messages_read_notification', { readerId: partnerId });
     }
+  });
+
+  // 👑 管理者機能：一斉アナウンス配信（音ON/OFF対応）
+  socket.on('admin_broadcast_alert', ({ message, playSound }) => {
+    if (!socket.isAdmin) return;
+
+    const sender = db.users[socket.userId];
+    const senderName = sender ? sender.name : "管理者";
+
+    io.emit('receive_broadcast_alert', {
+      title: `📢 ${senderName} からの一斉緊急アナウンス`,
+      message: message,
+      playSound: playSound
+    });
   });
 
   // 👑 管理者認証
@@ -224,20 +245,17 @@ io.on('connection', (socket) => {
       isBanned: u.bannedUntil > now
     }));
 
-    // メッセージが存在するすべての会話ペア（監視用）を取得
     const pairMap = new Set();
     const chatPairs = [];
     db.messages.forEach(m => {
+      if (m.toUserId === 'ADMIN_REPORT_ROOM') return;
       const key = [m.fromUserId, m.toUserId].sort().join('_');
       if (!pairMap.has(key)) {
         pairMap.add(key);
         const u1 = db.users[m.fromUserId];
         const u2 = db.users[m.toUserId];
         if (u1 && u2) {
-          chatPairs.push({
-            userA: u1,
-            userB: u2
-          });
+          chatPairs.push({ userA: u1, userB: u2 });
         }
       }
     });
