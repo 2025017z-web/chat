@@ -3,15 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>chat</title>
-  <!-- タブに表示される緑のチャットアイコン（ファビコン） -->
+  <title>Chat</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306C755'><path d='M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/></svg>">
   <script src="/socket.io/socket.io.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
     body { display: flex; height: 100vh; background-color: #f0f0f0; }
 
-    /* 初回名前入力用のモーダル */
     #modal-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000;
@@ -20,34 +18,42 @@
     .modal-box input { width: 100%; padding: 10px; margin: 15px 0; border: 1px solid #ccc; border-radius: 6px; }
     .modal-box button { background: #06C755; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; }
 
-    /* メイン画面構成 */
-    #sidebar { width: 300px; background: #ffffff; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
+    #sidebar { width: 320px; background: #ffffff; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
     .sidebar-header { background: #242a38; color: white; padding: 15px; font-weight: bold; }
     .user-list { flex: 1; overflow-y: auto; }
     .user-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid #eee; }
-    .user-info { font-weight: bold; color: #333; }
+    .user-info { display: flex; align-items: center; gap: 8px; font-weight: bold; color: #333; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .online { background-color: #06C755; }
+    .offline { background-color: #ccc; }
+
     .btn { padding: 6px 12px; border-radius: 15px; border: none; font-size: 12px; cursor: pointer; }
     .btn-add { background: #06C755; color: white; }
     .btn-pending { background: #ccc; color: #666; cursor: default; }
     .btn-chat { background: #4a90e2; color: white; }
 
-    /* チャットエリア（LINE風） */
     #chat-container { flex: 1; display: flex; flex-direction: column; background: #8cabd9; }
     .chat-header { background: #242a38; color: white; padding: 15px; font-weight: bold; }
-    .message-area { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+    .message-area { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
     
-    /* 吹き出しスタイル */
-    .msg-row { display: flex; flex-direction: column; max-width: 60%; }
+    /* 吹き出しと既読レイアウト */
+    .msg-row { display: flex; flex-direction: column; max-width: 70%; }
     .msg-row.me { align-self: flex-end; align-items: flex-end; }
     .msg-row.other { align-self: flex-start; align-items: flex-start; }
     .msg-sender { font-size: 11px; color: #fff; margin-bottom: 3px; }
+    
+    .msg-body { display: flex; align-items: flex-end; gap: 5px; }
+    .me .msg-body { flex-direction: row; }
+    .other .msg-body { flex-direction: row-reverse; }
+
+    .msg-meta { font-size: 10px; color: #e0e0e0; display: flex; flex-direction: column; align-items: flex-end; }
+    .read-status { color: #ffffff; font-weight: bold; margin-bottom: 2px; }
+
     .msg-bubble { padding: 10px 14px; border-radius: 15px; font-size: 14px; word-break: break-all; white-space: pre-wrap; line-height: 1.4; }
     .me .msg-bubble { background: #85e249; color: #000; border-top-right-radius: 2px; }
     .other .msg-bubble { background: #ffffff; color: #000; border-top-left-radius: 2px; }
-    .msg-time { font-size: 10px; color: #eee; margin-top: 2px; }
     .msg-media { max-width: 250px; max-height: 250px; border-radius: 8px; margin-top: 5px; display: block; }
 
-    /* 入力フォーム */
     .input-area { background: #ffffff; padding: 10px; display: flex; gap: 10px; align-items: center; }
     .input-area textarea { flex: 1; height: 40px; border: 1px solid #ddd; border-radius: 6px; padding: 8px; resize: none; outline: none; }
     .file-btn-label { font-size: 20px; cursor: pointer; padding: 0 5px; }
@@ -57,7 +63,6 @@
 </head>
 <body>
 
-  <!-- 初回名前入力ポップアップ -->
   <div id="modal-overlay">
     <div class="modal-box">
       <h3>名前を入力してください</h3>
@@ -66,13 +71,11 @@
     </div>
   </div>
 
-  <!-- 左側：オンラインユーザーリスト -->
   <div id="sidebar">
     <div class="sidebar-header" id="my-name-display">ユーザー一覧</div>
     <div class="user-list" id="user-list"></div>
   </div>
 
-  <!-- 右側：トーク画面 -->
   <div id="chat-container">
     <div class="chat-header" id="chat-header">友達を選んでチャットを開始してください</div>
     <div class="message-area" id="message-area"></div>
@@ -87,10 +90,15 @@
 
   <script>
     const socket = io();
-    let currentUserId = null;
+    let myUserId = localStorage.getItem('chat_userid');
     let selectedChatPartnerId = null;
 
-    // 初回名前保存の確認
+    // 初回アクセス時に固有IDを発行してブラウザに保存
+    if (!myUserId) {
+      myUserId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+      localStorage.setItem('chat_userid', myUserId);
+    }
+
     window.onload = () => {
       const savedName = localStorage.getItem('chat_username');
       if (savedName) {
@@ -109,35 +117,42 @@
 
     function initUser(name) {
       document.getElementById('my-name-display').innerText = `自分: ${name}`;
-      socket.emit('register', name);
+      socket.emit('register', { userId: myUserId, name: name });
     }
 
-    // ユーザーリスト更新
+    // ユーザーリストの動的更新
     socket.on('user_list_update', (users) => {
-      currentUserId = socket.id;
-      const me = users.find(u => u.id === currentUserId);
+      const me = users.find(u => u.userId === myUserId);
       const userListElement = document.getElementById('user-list');
       userListElement.innerHTML = '';
 
       users.forEach(user => {
-        if (user.id === currentUserId) return; // 自分はリストから除外
+        if (user.userId === myUserId) return;
 
         const div = document.createElement('div');
         div.className = 'user-item';
 
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'user-info';
-        nameSpan.innerText = user.name;
-        div.appendChild(nameSpan);
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'user-info';
+        
+        const dot = document.createElement('span');
+        dot.className = `status-dot ${user.isOnline ? 'online' : 'offline'}`;
+        infoDiv.appendChild(dot);
 
-        const isFriend = me && me.friends.includes(user.id);
-        const hasSentRequest = me && me.requestsSent.includes(user.id);
+        const nameSpan = document.createElement('span');
+        nameSpan.innerText = user.name;
+        infoDiv.appendChild(nameSpan);
+        
+        div.appendChild(infoDiv);
+
+        const isFriend = me && me.friends.includes(user.userId);
+        const hasSentRequest = me && me.requestsSent.includes(user.userId);
 
         if (isFriend) {
           const btn = document.createElement('button');
           btn.className = 'btn btn-chat';
           btn.innerText = 'チャット';
-          btn.onclick = () => selectPartner(user.id, user.name);
+          btn.onclick = () => selectPartner(user.userId, user.name);
           div.appendChild(btn);
         } else if (hasSentRequest) {
           const btn = document.createElement('button');
@@ -148,7 +163,7 @@
           const btn = document.createElement('button');
           btn.className = 'btn btn-add';
           btn.innerText = '友達申請';
-          btn.onclick = () => socket.emit('send_friend_request', user.id);
+          btn.onclick = () => socket.emit('send_friend_request', user.userId);
           div.appendChild(btn);
         }
 
@@ -156,11 +171,29 @@
       });
     });
 
-    function selectPartner(id, name) {
-      selectedChatPartnerId = id;
-      document.getElementById('chat-header').innerText = `${name} とのチャット`;
-      document.getElementById('message-area').innerHTML = ''; // 画面切り替え時にクリア
+    // 友達のチャットを選択（トーク履歴をサーバーから読み込み）
+    function selectPartner(partnerId, partnerName) {
+      selectedChatPartnerId = partnerId;
+      document.getElementById('chat-header').innerText = `${partnerName} とのチャット`;
+      document.getElementById('message-area').innerHTML = '';
+      
+      // 履歴リクエスト
+      socket.emit('get_chat_history', { partnerId: partnerId });
     }
+
+    // チャット履歴の受信
+    socket.on('chat_history', ({ partnerId, messages }) => {
+      if (partnerId !== selectedChatPartnerId) return;
+      
+      const messageArea = document.getElementById('message-area');
+      messageArea.innerHTML = '';
+      
+      messages.forEach(msg => renderMessage(msg));
+      messageArea.scrollTop = messageArea.scrollHeight;
+
+      // 開いたので既読を送信
+      socket.emit('mark_as_read', { partnerId: selectedChatPartnerId });
+    });
 
     // メッセージ送信
     function sendText() {
@@ -169,14 +202,14 @@
       if (!text || !selectedChatPartnerId) return;
 
       socket.emit('send_message', {
-        toId: selectedChatPartnerId,
+        toUserId: selectedChatPartnerId,
         text: text,
         file: null
       });
       input.value = '';
     }
 
-    // ファイル送信（画像・動画・その他ファイル）
+    // ファイル送信
     function sendFile() {
       const fileInput = document.getElementById('file-input');
       const file = fileInput.files[0];
@@ -185,7 +218,7 @@
       const reader = new FileReader();
       reader.onload = function(e) {
         socket.emit('send_message', {
-          toId: selectedChatPartnerId,
+          toUserId: selectedChatPartnerId,
           text: '',
           file: {
             name: file.name,
@@ -200,11 +233,30 @@
 
     // メッセージ受信
     socket.on('receive_message', (msg) => {
-      // 現在開いているチャット相手メッセージの場合のみ表示
-      if (msg.fromId !== selectedChatPartnerId && msg.toId !== selectedChatPartnerId) return;
+      if (msg.fromUserId !== selectedChatPartnerId && msg.toUserId !== selectedChatPartnerId) return;
 
+      renderMessage(msg);
       const messageArea = document.getElementById('message-area');
-      const isMe = msg.fromId === currentUserId;
+      messageArea.scrollTop = messageArea.scrollHeight;
+
+      // 開いている状態で相手からメッセージが来たら即既読
+      if (msg.fromUserId === selectedChatPartnerId) {
+        socket.emit('mark_as_read', { partnerId: selectedChatPartnerId });
+      }
+    });
+
+    // 相手が既読したときの更新通知
+    socket.on('messages_read_notification', ({ readerId }) => {
+      if (readerId === selectedChatPartnerId) {
+        // 画面を再取得して既読表示を最新化
+        socket.emit('get_chat_history', { partnerId: selectedChatPartnerId });
+      }
+    });
+
+    // メッセージのHTML描画関数
+    function renderMessage(msg) {
+      const messageArea = document.getElementById('message-area');
+      const isMe = msg.fromUserId === myUserId;
 
       const row = document.createElement('div');
       row.className = `msg-row ${isMe ? 'me' : 'other'}`;
@@ -216,12 +268,13 @@
         row.appendChild(sender);
       }
 
+      const body = document.createElement('div');
+      body.className = 'msg-body';
+
       const bubble = document.createElement('div');
       bubble.className = 'msg-bubble';
 
-      if (msg.text) {
-        bubble.innerText = msg.text;
-      }
+      if (msg.text) bubble.innerText = msg.text;
 
       if (msg.file) {
         if (msg.file.type.startsWith('image/')) {
@@ -245,16 +298,28 @@
         }
       }
 
-      row.appendChild(bubble);
+      const meta = document.createElement('div');
+      meta.className = 'msg-meta';
 
-      const time = document.createElement('div');
-      time.className = 'msg-time';
-      time.innerText = msg.time;
-      row.appendChild(time);
+      // 自分のメッセージ かつ 既読フラグがtrueなら「既読」を表示
+      if (isMe && msg.read) {
+        const readSpan = document.createElement('span');
+        readSpan.className = 'read-status';
+        readSpan.innerText = '既読';
+        meta.appendChild(readSpan);
+      }
+
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'msg-time';
+      timeSpan.innerText = msg.time;
+      meta.appendChild(timeSpan);
+
+      body.appendChild(bubble);
+      body.appendChild(meta);
+      row.appendChild(body);
 
       messageArea.appendChild(row);
-      messageArea.scrollTop = messageArea.scrollHeight;
-    });
+    }
   </script>
 </body>
 </html>
