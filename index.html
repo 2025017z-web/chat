@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chat</title>
+  <title>LINE風チャット</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306C755'><path d='M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/></svg>">
   <script src="/socket.io/socket.io.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
     body { display: flex; height: 100vh; background-color: #f0f0f0; }
 
+    /* 初期名前入力 */
     #modal-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000;
@@ -18,25 +19,42 @@
     .modal-box input { width: 100%; padding: 10px; margin: 15px 0; border: 1px solid #ccc; border-radius: 6px; }
     .modal-box button { background: #06C755; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; }
 
-    #sidebar { width: 320px; background: #ffffff; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
-    .sidebar-header { background: #242a38; color: white; padding: 15px; font-weight: bold; }
+    /* サイドバー */
+    #sidebar { width: 340px; background: #ffffff; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
+    .sidebar-header { background: #242a38; color: white; padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; }
+    .rename-btn { background: #4a90e2; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+
     .user-list { flex: 1; overflow-y: auto; }
-    .user-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid #eee; }
-    .user-info { display: flex; align-items: center; gap: 8px; font-weight: bold; color: #333; }
+    .user-item { display: flex; flex-direction: column; padding: 10px 12px; border-bottom: 1px solid #eee; gap: 5px; }
+    .user-row-main { display: flex; align-items: center; justify-content: space-between; }
+    .user-info { display: flex; align-items: center; gap: 8px; font-weight: bold; color: #333; font-size: 14px; }
     .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
     .online { background-color: #06C755; }
     .offline { background-color: #ccc; }
+    .ban-badge { background: red; color: white; font-size: 10px; padding: 2px 4px; border-radius: 3px; }
 
-    .btn { padding: 6px 12px; border-radius: 15px; border: none; font-size: 12px; cursor: pointer; }
+    .btn { padding: 5px 10px; border-radius: 12px; border: none; font-size: 11px; cursor: pointer; }
     .btn-add { background: #06C755; color: white; }
     .btn-pending { background: #ccc; color: #666; cursor: default; }
     .btn-chat { background: #4a90e2; color: white; }
 
+    /* 管理者専用パネル（ユーザー毎） */
+    .admin-controls { display: none; background: #fff0f0; padding: 5px; border-radius: 4px; border: 1px dashed red; gap: 4px; font-size: 11px; }
+    .admin-controls input { width: 70px; padding: 2px; }
+    .admin-controls button { background: #d9534f; color: white; border: none; border-radius: 3px; padding: 2px 5px; cursor: pointer; }
+
+    /* 左下コード入力エリア */
+    .admin-code-area { padding: 10px; background: #1e222d; color: white; display: flex; gap: 5px; }
+    .admin-code-area input { flex: 1; padding: 6px; border-radius: 4px; border: none; font-size: 12px; }
+    .admin-code-area button { background: #e67e22; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+
+    /* チャット画面 */
     #chat-container { flex: 1; display: flex; flex-direction: column; background: #8cabd9; }
-    .chat-header { background: #242a38; color: white; padding: 15px; font-weight: bold; }
+    .chat-header { background: #242a38; color: white; padding: 15px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+    .admin-impersonate-select { display: none; background: #ffeaa7; padding: 4px; border-radius: 4px; font-size: 12px; color: #333; }
+
     .message-area { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
     
-    /* 吹き出しと既読レイアウト */
     .msg-row { display: flex; flex-direction: column; max-width: 70%; }
     .msg-row.me { align-self: flex-end; align-items: flex-end; }
     .msg-row.other { align-self: flex-start; align-items: flex-start; }
@@ -63,6 +81,7 @@
 </head>
 <body>
 
+  <!-- 初回名前入力ポップアップ -->
   <div id="modal-overlay">
     <div class="modal-box">
       <h3>名前を入力してください</h3>
@@ -71,14 +90,37 @@
     </div>
   </div>
 
+  <!-- 左側：サイドバー -->
   <div id="sidebar">
-    <div class="sidebar-header" id="my-name-display">ユーザー一覧</div>
+    <div class="sidebar-header">
+      <span id="my-name-display">自分: -</span>
+      <button class="rename-btn" onclick="changeMyName()">名前変更</button>
+    </div>
+    
     <div class="user-list" id="user-list"></div>
+
+    <!-- 左下のコード入力欄（管理者コマンド） -->
+    <div class="admin-code-area">
+      <input type="password" id="admin-code-input" placeholder="管理者コード">
+      <button onclick="submitAdminCode()">実行</button>
+    </div>
   </div>
 
+  <!-- 右側：チャット画面 -->
   <div id="chat-container">
-    <div class="chat-header" id="chat-header">友達を選んでチャットを開始してください</div>
+    <div class="chat-header">
+      <span id="chat-header-text">友達を選んでチャットを開始してください</span>
+      <!-- 管理者用のなりすまし切り替え -->
+      <div class="admin-impersonate-select" id="admin-impersonate-box">
+        なりすまし送信: 
+        <select id="impersonate-user-select">
+          <option value="">(自分として送信)</option>
+        </select>
+      </div>
+    </div>
+
     <div class="message-area" id="message-area"></div>
+
     <div class="input-area">
       <label class="file-btn-label" title="ファイルを添付">📎
         <input type="file" id="file-input" onchange="sendFile()">
@@ -92,8 +134,9 @@
     const socket = io();
     let myUserId = localStorage.getItem('chat_userid');
     let selectedChatPartnerId = null;
+    let isAdmin = false;
+    let cachedUsers = [];
 
-    // 初回アクセス時に固有IDを発行してブラウザに保存
     if (!myUserId) {
       myUserId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
       localStorage.setItem('chat_userid', myUserId);
@@ -120,17 +163,63 @@
       socket.emit('register', { userId: myUserId, name: name });
     }
 
-    // ユーザーリストの動的更新
+    // 自分の名前を変更する
+    function changeMyName() {
+      const newName = prompt('新しい名前を入力してください:');
+      if (newName && newName.trim()) {
+        localStorage.setItem('chat_username', newName.trim());
+        document.getElementById('my-name-display').innerText = `自分: ${newName.trim()}`;
+        socket.emit('change_name', { newName: newName.trim() });
+      }
+    }
+
+    // 管理者コードの送信
+    function submitAdminCode() {
+      const code = document.getElementById('admin-code-input').value;
+      socket.emit('admin_auth', { code: code });
+    }
+
+    socket.on('admin_auth_result', ({ success }) => {
+      if (success) {
+        isAdmin = true;
+        alert('👑 管理者モードが有効化されました');
+        document.getElementById('admin-impersonate-box').style.display = 'block';
+        updateUserListUI();
+      } else {
+        alert('コードが正しくありません');
+      }
+    });
+
+    // ユーザーリスト更新
     socket.on('user_list_update', (users) => {
-      const me = users.find(u => u.userId === myUserId);
+      cachedUsers = users;
+      updateUserListUI();
+    });
+
+    function updateUserListUI() {
+      const me = cachedUsers.find(u => u.userId === myUserId);
       const userListElement = document.getElementById('user-list');
       userListElement.innerHTML = '';
 
-      users.forEach(user => {
-        if (user.userId === myUserId) return;
+      // なりすましセレクトボックスの更新
+      const impSelect = document.getElementById('impersonate-user-select');
+      impSelect.innerHTML = '<option value="">(自分として送信)</option>';
+
+      cachedUsers.forEach(user => {
+        if (user.userId !== myUserId) {
+          const opt = document.createElement('option');
+          opt.value = user.userId;
+          opt.innerText = user.name;
+          impSelect.appendChild(opt);
+        }
+
+        if (user.userId === myUserId && !isAdmin) return;
 
         const div = document.createElement('div');
         div.className = 'user-item';
+
+        const rowMain = document.createElement('div');
+        rowMain.className = 'user-row-main';
 
         const infoDiv = document.createElement('div');
         infoDiv.className = 'user-info';
@@ -140,71 +229,107 @@
         infoDiv.appendChild(dot);
 
         const nameSpan = document.createElement('span');
-        nameSpan.innerText = user.name;
+        nameSpan.innerText = user.name + (user.userId === myUserId ? ' (自分)' : '');
         infoDiv.appendChild(nameSpan);
+
+        if (user.isBanned) {
+          const banSpan = document.createElement('span');
+          banSpan.className = 'ban-badge';
+          banSpan.innerText = 'BAN中';
+          infoDiv.appendChild(banSpan);
+        }
         
-        div.appendChild(infoDiv);
+        rowMain.appendChild(infoDiv);
 
         const isFriend = me && me.friends.includes(user.userId);
         const hasSentRequest = me && me.requestsSent.includes(user.userId);
 
-        if (isFriend) {
+        // 管理者の場合は誰とでもチャット可能、一般は友達のみ
+        if (isFriend || isAdmin) {
           const btn = document.createElement('button');
           btn.className = 'btn btn-chat';
-          btn.innerText = 'チャット';
+          btn.innerText = isAdmin && !isFriend ? '監視チャット' : 'チャット';
           btn.onclick = () => selectPartner(user.userId, user.name);
-          div.appendChild(btn);
+          rowMain.appendChild(btn);
         } else if (hasSentRequest) {
           const btn = document.createElement('button');
           btn.className = 'btn btn-pending';
           btn.innerText = '申請中';
-          div.appendChild(btn);
+          rowMain.appendChild(btn);
         } else {
           const btn = document.createElement('button');
           btn.className = 'btn btn-add';
           btn.innerText = '友達申請';
           btn.onclick = () => socket.emit('send_friend_request', user.userId);
-          div.appendChild(btn);
+          rowMain.appendChild(btn);
+        }
+
+        div.appendChild(rowMain);
+
+        // 👑 管理者操作コントロールパネル
+        if (isAdmin && user.userId !== myUserId) {
+          const adminDiv = document.createElement('div');
+          adminDiv.className = 'admin-controls';
+          adminDiv.style.display = 'flex';
+
+          adminDiv.innerHTML = `
+            <button onclick="adminRename('${user.userId}')">名前改変</button>
+            <button onclick="adminBan('${user.userId}')">BAN</button>
+          `;
+          div.appendChild(adminDiv);
         }
 
         userListElement.appendChild(div);
       });
-    });
+    }
 
-    // 友達のチャットを選択（トーク履歴をサーバーから読み込み）
+    // 👑 他人の名前を変更
+    function adminRename(targetUserId) {
+      const newName = prompt('新しい名前を入力（全員から見ても変わります）:');
+      if (newName) {
+        socket.emit('admin_rename_user', { targetUserId, newName });
+      }
+    }
+
+    // 👑 使用禁止（BAN）にする
+    function adminBan(targetUserId) {
+      const minutes = prompt('何分間使用禁止にしますか？ (分単位):', '5');
+      if (minutes && !isNaN(minutes)) {
+        socket.emit('admin_ban_user', { targetUserId, minutes: parseFloat(minutes) });
+      }
+    }
+
+    // トーク相手選択
     function selectPartner(partnerId, partnerName) {
       selectedChatPartnerId = partnerId;
-      document.getElementById('chat-header').innerText = `${partnerName} とのチャット`;
+      document.getElementById('chat-header-text').innerText = `${partnerName} とのチャット`;
       document.getElementById('message-area').innerHTML = '';
-      
-      // 履歴リクエスト
       socket.emit('get_chat_history', { partnerId: partnerId });
     }
 
-    // チャット履歴の受信
+    // チャット履歴の受領
     socket.on('chat_history', ({ partnerId, messages }) => {
       if (partnerId !== selectedChatPartnerId) return;
-      
       const messageArea = document.getElementById('message-area');
       messageArea.innerHTML = '';
-      
       messages.forEach(msg => renderMessage(msg));
       messageArea.scrollTop = messageArea.scrollHeight;
-
-      // 開いたので既読を送信
       socket.emit('mark_as_read', { partnerId: selectedChatPartnerId });
     });
 
-    // メッセージ送信
+    // 送信ボタン
     function sendText() {
       const input = document.getElementById('text-input');
       const text = input.value;
       if (!text || !selectedChatPartnerId) return;
 
+      const impersonateUserId = document.getElementById('impersonate-user-select').value;
+
       socket.emit('send_message', {
         toUserId: selectedChatPartnerId,
         text: text,
-        file: null
+        file: null,
+        impersonateUserId: impersonateUserId || null
       });
       input.value = '';
     }
@@ -215,16 +340,15 @@
       const file = fileInput.files[0];
       if (!file || !selectedChatPartnerId) return;
 
+      const impersonateUserId = document.getElementById('impersonate-user-select').value;
+
       const reader = new FileReader();
       reader.onload = function(e) {
         socket.emit('send_message', {
           toUserId: selectedChatPartnerId,
           text: '',
-          file: {
-            name: file.name,
-            type: file.type,
-            data: e.target.result
-          }
+          file: { name: file.name, type: file.type, data: e.target.result },
+          impersonateUserId: impersonateUserId || null
         });
         fileInput.value = '';
       };
@@ -234,26 +358,26 @@
     // メッセージ受信
     socket.on('receive_message', (msg) => {
       if (msg.fromUserId !== selectedChatPartnerId && msg.toUserId !== selectedChatPartnerId) return;
-
       renderMessage(msg);
       const messageArea = document.getElementById('message-area');
       messageArea.scrollTop = messageArea.scrollHeight;
 
-      // 開いている状態で相手からメッセージが来たら即既読
       if (msg.fromUserId === selectedChatPartnerId) {
         socket.emit('mark_as_read', { partnerId: selectedChatPartnerId });
       }
     });
 
-    // 相手が既読したときの更新通知
     socket.on('messages_read_notification', ({ readerId }) => {
       if (readerId === selectedChatPartnerId) {
-        // 画面を再取得して既読表示を最新化
         socket.emit('get_chat_history', { partnerId: selectedChatPartnerId });
       }
     });
 
-    // メッセージのHTML描画関数
+    socket.on('error_message', (msg) => {
+      alert(msg);
+    });
+
+    // 画面描画
     function renderMessage(msg) {
       const messageArea = document.getElementById('message-area');
       const isMe = msg.fromUserId === myUserId;
@@ -301,7 +425,6 @@
       const meta = document.createElement('div');
       meta.className = 'msg-meta';
 
-      // 自分のメッセージ かつ 既読フラグがtrueなら「既読」を表示
       if (isMe && msg.read) {
         const readSpan = document.createElement('span');
         readSpan.className = 'read-status';
