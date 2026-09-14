@@ -205,12 +205,21 @@
     let alertInterval = null;
     let originalTitle = document.title;
 
+    // タブアイコン用SVGデータ
+    const defaultIcon = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306C755'><path d='M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/></svg>";
+    const alertIcon = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ff4757'><path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z'/></svg>";
+
     if (!myUserId) {
       myUserId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
       localStorage.setItem('chat_userid', myUserId);
     }
 
     window.onload = () => {
+      // ブラウザのデスクトップ通知の許可を求める（可能環境のみ）
+      if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+        Notification.requestPermission();
+      }
+
       const savedName = localStorage.getItem('chat_username');
       if (savedName) {
         document.getElementById('modal-overlay').style.display = 'none';
@@ -399,7 +408,6 @@
       if (minutes && !isNaN(minutes)) socket.emit('admin_ban_user', { targetUserId, minutes: parseFloat(minutes) });
     }
 
-    // 👑 管理者専用 報告用チャットを開く
     function openReportChat() {
       watchedUserA = myUserId;
       watchedUserB = 'ADMIN_REPORT_ROOM';
@@ -523,7 +531,6 @@
       messageArea.scrollTop = messageArea.scrollHeight;
     });
 
-    // 📢 一斉アナウンス送信用ダイアログ制御
     function openBroadcastPrompt() {
       document.getElementById('broadcast-modal-overlay').style.display = 'flex';
     }
@@ -543,26 +550,47 @@
       closeBroadcastPrompt();
     }
 
-    // 📢 受信時の一斉アナウンス処理（全画面表示・タブ点滅・音ON/OFF）
+    function setFavicon(url) {
+      let link = document.querySelector("link[rel*='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = url;
+    }
+
+    // 📢 受信時の一斉アナウンス処理（全画面表示・音・タブ文字/アイコン点滅・ポップアップ通知）
     socket.on('receive_broadcast_alert', ({ title, message, playSound }) => {
       // 1. 全画面ポップアップ表示
       document.getElementById('alert-title').innerText = title;
       document.getElementById('alert-body').innerText = message;
       document.getElementById('alert-modal-overlay').style.display = 'flex';
 
-      // 2. 音が有効な場合、警告音を再生
+      // 2. 音が有効な場合再生
       if (playSound) {
         playBeepSound();
       }
 
-      // 3. ブラウザのタブタイトルを「【📢緊急連絡あり！】」と交互に点滅
+      // 3. ブラウザのタブ文字とアイコンを交互に点滅
       if (alertInterval) clearInterval(alertInterval);
+      let toggle = false;
       alertInterval = setInterval(() => {
-        document.title = (document.title === originalTitle) ? "【📢緊急連絡あり！】" : "【！！！！！！】";
+        toggle = !toggle;
+        document.title = toggle ? "【📢緊急連絡あり！】" : "【！！！！！！】";
+        setFavicon(toggle ? alertIcon : defaultIcon);
       }, 500);
+
+      // 4. デスクトップ通知（許可時のみ発動）
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification(title, {
+          body: message,
+          icon: alertIcon,
+          requireInteraction: true
+        });
+      }
     });
 
-    // 確認ボタンを押したらアラートと点滅を停止
     function closeAlertModal() {
       document.getElementById('alert-modal-overlay').style.display = 'none';
       if (alertInterval) {
@@ -570,9 +598,9 @@
         alertInterval = null;
       }
       document.title = originalTitle;
+      setFavicon(defaultIcon);
     }
 
-    // Web Audio APIによる電子警告音の再生関数
     function playBeepSound() {
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -582,7 +610,7 @@
         const gain = ctx.createGain();
 
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, ctx.currentTime); // 880Hz
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
         gain.gain.setValueAtTime(0.2, ctx.currentTime);
 
         osc.connect(gain);
