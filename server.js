@@ -83,15 +83,15 @@ io.on('connection', (socket) => {
     broadcastUserList();
   });
 
-  // 4. チャット履歴の取得
-  socket.on('get_chat_history', ({ partnerId, customFromId, customToId }) => {
-    const myId = socket.userId;
-    let u1 = myId;
+  // 4. チャット履歴の取得（ペア監視対応）
+  socket.on('get_chat_history', ({ partnerId, userA, userB }) => {
+    let u1 = socket.userId;
     let u2 = partnerId;
 
-    if (socket.isAdmin && customFromId && customToId) {
-      u1 = customFromId;
-      u2 = customToId;
+    // 管理者がペア指定で監視する場合
+    if (socket.isAdmin && userA && userB) {
+      u1 = userA;
+      u2 = userB;
     }
 
     const history = db.messages.filter(m => 
@@ -99,10 +99,10 @@ io.on('connection', (socket) => {
       (m.fromUserId === u2 && m.toUserId === u1)
     );
 
-    socket.emit('chat_history', { partnerId: u2, messages: history });
+    socket.emit('chat_history', { userA: u1, userB: u2, messages: history });
   });
 
-  // 5. メッセージ送信（バグ修正済み）
+  // 5. メッセージ送信（なりすまし送信含む）
   socket.on('send_message', ({ toUserId, text, file, impersonateUserId }) => {
     if (isBanned(socket.userId)) {
       return socket.emit('error_message', '現在使用禁止（BAN）に設定されています。');
@@ -131,25 +131,27 @@ io.on('connection', (socket) => {
     db.messages.push(msg);
     saveData();
 
-    // ★送信者（自分）へ直接返信（表示バグの修正）
+    // 送信者本人へ反映
     socket.emit('receive_message', msg);
 
-    // ★受信者（相手）へ配信
+    // 受信者へ通知
     const targetSocketId = onlineSockets[toUserId];
     if (targetSocketId && targetSocketId !== socket.id) {
       io.to(targetSocketId).emit('receive_message', msg);
     }
 
-    // ★なりすまし元のユーザーへ配信（自身と宛先を除く）
+    // なりすまし元ユーザーへ通知
     const senderSocketId = onlineSockets[actualSenderId];
     if (senderSocketId && senderSocketId !== socket.id && senderSocketId !== targetSocketId) {
       io.to(senderSocketId).emit('receive_message', msg);
     }
+
+    broadcastUserList(); // 全体の会話ペア一覧更新のため
   });
 
   // 6. 既読処理
-  socket.on('mark_as_read', ({ partnerId }) => {
-    const myId = socket.userId;
+  socket.on('mark_as_read', ({ partnerId, watchedUserA }) => {
+    const myId = watchedUserA || socket.userId;
     if (!myId || !partnerId) return;
 
     let updated = false;
@@ -168,7 +170,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 👑 管理者機能
+  // 👑 管理者認証
   socket.on('admin_auth', ({ code }) => {
     if (code === ADMIN_CODE) {
       socket.isAdmin = true;
@@ -178,7 +180,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 👑 管理者モード解除
   socket.on('admin_logout', () => {
     socket.isAdmin = false;
     socket.emit('admin_logout_result');
@@ -222,7 +223,26 @@ io.on('connection', (socket) => {
       isOnline: !!onlineSockets[u.userId],
       isBanned: u.bannedUntil > now
     }));
-    io.emit('user_list_update', userList);
+
+    // メッセージが存在するすべての会話ペア（監視用）を取得
+    const pairMap = new Set();
+    const chatPairs = [];
+    db.messages.forEach(m => {
+      const key = [m.fromUserId, m.toUserId].sort().join('_');
+      if (!pairMap.has(key)) {
+        pairMap.add(key);
+        const u1 = db.users[m.fromUserId];
+        const u2 = db.users[m.toUserId];
+        if (u1 && u2) {
+          chatPairs.push({
+            userA: u1,
+            userB: u2
+          });
+        }
+      }
+    });
+
+    io.emit('user_list_update', { users: userList, chatPairs });
   }
 
   function isBanned(userId) {
