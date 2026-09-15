@@ -14,7 +14,7 @@ const io = new Server(server, {
 app.use(express.static(__dirname));
 
 // 🔑 管理者コード（ここを好きな文字・パスワードに変更してください！）
-const ADMIN_CODE = "admin123";
+const ADMIN_CODE = "hamsteromu";
 
 // --- データ保存処理 ---
 const DATA_FILE = path.join(__dirname, 'chat_data.json');
