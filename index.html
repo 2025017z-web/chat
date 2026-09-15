@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>chat</title>
-  <!-- タブアイコン（SVGファビコン）追加 -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
   <script src="/socket.io/socket.io.js"></script>
   <style>
@@ -30,7 +29,7 @@
     .nav-item:hover, .nav-item.active { color: white; background: #3d4756; }
 
     #sidebar { width: 320px; background: #ffffff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
-    .tab-content { display: none; flex-direction: column; height: 100%; }
+    .tab-content { display: none; flex-direction: column; height: 100%; overflow-y: auto; }
     .tab-content.active { display: flex; }
 
     .sidebar-header { padding: 15px; font-size: 18px; font-weight: bold; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fbfbfb; }
@@ -190,24 +189,32 @@
     <div id="tab-admin" class="tab-content">
       <div class="sidebar-header">👑 管理者パネル</div>
       <div style="padding: 15px;">
+        
+        <!-- 未ログインフォーム -->
         <div id="admin-login-box">
-          <div style="font-size: 12px; margin-bottom: 5px; font-weight: bold;">管理者パスワード入力:</div>
-          <input type="password" id="admin-code-input" placeholder="パスワードを入力" style="width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 4px;">
-          <button onclick="submitAdminCode()" style="width: 100%; background: #e67e22; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold;">ログイン</button>
+          <form onsubmit="event.preventDefault(); submitAdminCode();">
+            <div style="font-size: 12px; margin-bottom: 5px; font-weight: bold;">管理者パスワード入力:</div>
+            <input type="password" id="admin-code-input" placeholder="パスワードを入力" style="width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 4px;">
+            <button type="submit" style="width: 100%; background: #e67e22; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: bold;">ログイン</button>
+          </form>
         </div>
-        <div id="admin-active-box" style="display: none;">
-          <div style="color: #27ae60; font-weight: bold; font-size: 12px; margin-bottom: 8px;">🔓 管理者権限認証済み</div>
-          <button onclick="openReportChat()" style="width: 100%; background: #8e44ad; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 8px;">📢 通報・報告ルーム</button>
-          <button onclick="openBroadcastPrompt()" style="width: 100%; background: #ff4757; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 12px;">⚡ 全員に一斉アナウンス</button>
-          <button onclick="logoutAdmin()" style="width: 100%; background: #7f8c8d; color: white; border: none; padding: 6px; border-radius: 4px; cursor: pointer;">ログアウト</button>
-        </div>
-      </div>
-      <!-- 👑 リアルタイム監視機能 UI -->
-      <div class="section-title">🕵️ 全会話の監視・なりすまし</div>
-      <div class="item-list" id="admin-chat-pairs" style="max-height: 150px;"></div>
 
-      <div class="section-title">ユーザー管理 & コイン変更</div>
-      <div class="item-list" id="admin-user-list"></div>
+        <!-- 認証成功時のみ展開されるエリア -->
+        <div id="admin-active-box" style="display: none;">
+          <div style="color: #27ae60; font-weight: bold; font-size: 12px; margin-bottom: 12px;">🔓 管理者権限認証済み</div>
+          <button onclick="openReportChat()" style="width: 100%; background: #8e44ad; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 8px;">📢 通報・報告ルーム</button>
+          <button onclick="openBroadcastPrompt()" style="width: 100%; background: #ff4757; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 15px;">⚡ 全員に一斉アナウンス</button>
+
+          <div class="section-title" style="margin: 0 -15px 5px -15px;">🕵️ 全会話の監視・なりすまし</div>
+          <div class="item-list" id="admin-chat-pairs" style="max-height: 150px; margin: 0 -15px 15px -15px;"></div>
+
+          <div class="section-title" style="margin: 0 -15px 5px -15px;">ユーザー管理 & コイン変更</div>
+          <div class="item-list" id="admin-user-list" style="margin: 0 -15px 15px -15px;"></div>
+
+          <button onclick="logoutAdmin()" style="width: 100%; background: #7f8c8d; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; margin-top: 10px;">ログアウト</button>
+        </div>
+
+      </div>
     </div>
 
   </div>
@@ -250,7 +257,6 @@
       localStorage.setItem('chat_userid', myUserId);
     }
 
-    // 🔔 通知・音の初期設定
     function enableAudioAndNotification() {
       if (!audioContextUnlocked) {
         audioContextUnlocked = true;
@@ -260,7 +266,6 @@
       }
     }
 
-    // 🔊 通知音の再生 (外部ファイル不要)
     function playNotificationSound() {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -347,9 +352,11 @@
     });
 
     function submitAdminCode() {
-      const code = document.getElementById('admin-code-input').value;
+      const code = document.getElementById('admin-code-input').value.trim();
+      if (!code) return alert('パスワードを入力してください');
       socket.emit('admin_auth', { code });
     }
+
     function logoutAdmin() { socket.emit('admin_logout'); }
 
     socket.on('admin_auth_result', ({ success }) => {
@@ -369,6 +376,7 @@
       document.getElementById('admin-login-box').style.display = 'block';
       document.getElementById('admin-active-box').style.display = 'none';
       document.getElementById('impersonate-bar').style.display = 'none';
+      document.getElementById('admin-code-input').value = '';
       updateUI();
     });
 
@@ -462,7 +470,6 @@
           adminUserList.appendChild(item);
         });
 
-        // 🕵️ 監視ペア一覧更新
         const pairContainer = document.getElementById('admin-chat-pairs');
         pairContainer.innerHTML = '';
         if (cachedData.chatPairs && cachedData.chatPairs.length > 0) {
@@ -488,7 +495,6 @@
       renderStampPicker();
     }
 
-    // 🕵️ 会話の監視なりすまし選択
     function inspectPair(userAId, userBId, nameA, nameB) {
       watchedUserA = userAId;
       watchedUserB = userBId;
@@ -609,9 +615,7 @@
       reader.readAsDataURL(file);
     }
 
-    // 🔔 通知サウンド＆ブラウザデスクトップ通知処理
     socket.on('receive_message', (msg) => {
-      // 自分宛のメッセージかチェック
       if (msg.fromUserId !== myUserId) {
         playNotificationSound();
         if ("Notification" in window && Notification.permission === "granted") {
