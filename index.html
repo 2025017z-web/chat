@@ -795,6 +795,18 @@
       document.getElementById('alert-title').innerText = title;
       document.getElementById('alert-body').innerText = message;
       document.getElementById('alert-modal-overlay').style.display = 'flex';
+
+      playNotificationSound();
+
+      if ("Notification" in window && Notification.permission === "granted") {
+        const alertNav = new Notification(title, {
+          body: message,
+          tag: 'admin_broadcast_' + Date.now()
+        });
+        alertNav.onclick = () => {
+          window.focus();
+        };
+      }
     });
 
     function closeAlertModal() { document.getElementById('alert-modal-overlay').style.display = 'none'; }
