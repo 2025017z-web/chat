@@ -282,6 +282,7 @@
     }
 
     window.onload = () => {
+      enableAudioAndNotification();
       const savedName = localStorage.getItem('chat_username');
       if (savedName) {
         document.getElementById('modal-overlay').style.display = 'none';
@@ -617,10 +618,14 @@
       if (msg.fromUserId !== myUserId) {
         playNotificationSound();
         if ("Notification" in window && Notification.permission === "granted") {
-          new Notification(msg.fromName, {
-            body: msg.text || (msg.stampUrl ? '【スタンプ】' : '【ファイル】'),
-            icon: msg.fromAvatar || undefined
+          const n = new Notification(`💬 ${msg.fromName}`, {
+            body: msg.text || (msg.stampUrl ? '【スタンプが届きました】' : '【ファイルが届きました】'),
+            icon: msg.fromAvatar || undefined,
+            tag: msg.id
           });
+          n.onclick = () => {
+            window.focus();
+          };
         }
       }
 
@@ -734,9 +739,13 @@
     function buyStamp(stampId) {
       const stamp = allStamps.find(s => s.id === stampId);
       if (!stamp) return;
+      const me = cachedData.users.find(u => u.userId === myUserId);
+      
+      if (me && (me.coins || 0) < stamp.price) {
+        return alert(`コインが足りません！（必要: ${stamp.price} コイン / 所持: ${me.coins || 0} コイン）`);
+      }
 
-      const price = Number(stamp.price) || 0;
-      if (confirm(`スタンプ「${stamp.name}」を ${price} コインで購入しますか？`)) {
+      if (confirm(`スタンプ「${stamp.name}」を ${stamp.price} コインで購入しますか？`)) {
         socket.emit('buy_stamp', stampId);
       }
     }
