@@ -11,7 +11,7 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
-const ADMIN_PASSWORD = "admin"; // 👑 管理者パスワード
+const ADMIN_PASSWORD = "adminhamu"; // 👑 管理者パスワード
 const DATA_FILE = path.join(__dirname, 'data.json');
 
 // --- データベース（メモリ ＆ ファイル保存） ---
@@ -51,7 +51,6 @@ function loadData() {
 // 変更時にファイルへ書き込み
 function saveData() {
   try {
-    // 一時的に socketId などの動的情報を除外して保存
     const copyUsers = {};
     Object.keys(db.users).forEach(id => {
       const u = { ...db.users[id] };
@@ -74,7 +73,19 @@ function saveData() {
 
 loadData();
 
+// 静的ファイルの提供設定（ルートおよびpublicフォルダの両方に対応）
+app.use(express.static(__dirname));
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/', (req, res) => {
+  if (fs.existsSync(path.join(__dirname, 'index.html'))) {
+    res.sendFile(path.join(__dirname, 'index.html'));
+  } else if (fs.existsSync(path.join(__dirname, 'public', 'index.html'))) {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  } else {
+    res.status(404).send('index.html が見つかりません。server.js と同じフォルダに index.html を配置してください。');
+  }
+});
 
 // デフォルトのミッション設定
 function getDefaultMissions() {
@@ -100,7 +111,6 @@ function broadcastUserList() {
     missions: u.missions || []
   }));
 
-  // 会話されているアクティブなペアリストを提示
   const chatPairsMap = new Map();
   db.messages.forEach(m => {
     if (m.toUserId === 'ADMIN_REPORT_ROOM') return;
@@ -137,7 +147,7 @@ io.on('connection', (socket) => {
         name,
         avatar: null,
         bgImage: null,
-        coins: 100, // 初期コイン
+        coins: 100,
         friends: savedFriends || [],
         requestsSent: savedRequests || [],
         ownedStamps: ['stamp_default_1', 'stamp_default_2', 'stamp_default_3'],
@@ -178,7 +188,6 @@ io.on('connection', (socket) => {
       db.users[currentUserId].requestsSent.push(targetUserId);
     }
 
-    // 相互追加処理
     if (!db.users[currentUserId].friends.includes(targetUserId)) {
       db.users[currentUserId].friends.push(targetUserId);
     }
@@ -196,7 +205,6 @@ io.on('connection', (socket) => {
     if (partnerId === 'ADMIN_REPORT_ROOM') {
       history = db.messages.filter(m => m.toUserId === 'ADMIN_REPORT_ROOM' || m.fromUserId === currentUserId);
     } else if (userA && userB) {
-      // 管理者の監視用
       history = db.messages.filter(m => 
         (m.fromUserId === userA && m.toUserId === userB) || (m.fromUserId === userB && m.toUserId === userA)
       );
@@ -236,11 +244,9 @@ io.on('connection', (socket) => {
 
     db.messages.push(msgObj);
 
-    // 送信者にコイン加算 (+5コイン)
     if (db.users[senderId]) {
       db.users[senderId].coins = (db.users[senderId].coins || 0) + 5;
       
-      // ミッション進捗更新
       if (db.users[senderId].missions) {
         db.users[senderId].missions.forEach(m => {
           if (m.id === 'm1' || m.id === 'm2') m.current += 1;
@@ -250,12 +256,11 @@ io.on('connection', (socket) => {
 
     saveData();
 
-    // リアルタイム送信
     io.emit('receive_message', msgObj);
     broadcastUserList();
   });
 
-  // 6. 既読をつける
+  // 6. 既読処理
   socket.on('mark_as_read', ({ partnerId, watchedUserA }) => {
     const targetA = watchedUserA || currentUserId;
     let updated = false;
@@ -279,7 +284,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 7. スタンプ自作・作成
+  // 7. スタンプ自作
   socket.on('create_stamp', ({ name, imageUrl, price }) => {
     if (!currentUserId) return;
     const newStamp = {
@@ -294,7 +299,6 @@ io.on('connection', (socket) => {
     if (!db.users[currentUserId].ownedStamps) db.users[currentUserId].ownedStamps = [];
     db.users[currentUserId].ownedStamps.push(newStamp.id);
 
-    // ミッション達成判定
     if (db.users[currentUserId].missions) {
       const m = db.users[currentUserId].missions.find(x => x.id === 'm3');
       if (m) m.current = 1;
@@ -319,12 +323,10 @@ io.on('connection', (socket) => {
     if (!user.ownedStamps) user.ownedStamps = [];
     user.ownedStamps.push(stampId);
 
-    // 作者に還元 (80%)
     if (stamp.creatorId && db.users[stamp.creatorId]) {
       db.users[stamp.creatorId].coins = (db.users[stamp.creatorId].coins || 0) + Math.floor(stamp.price * 0.8);
     }
 
-    // ミッション更新
     if (user.missions) {
       const m = user.missions.find(x => x.id === 'm3');
       if (m) m.current = 1;
@@ -335,7 +337,7 @@ io.on('connection', (socket) => {
     socket.emit('update_stamps_list', db.stamps);
   });
 
-  // 9. ミッション報酬受取
+  // 9. ミッション達成
   socket.on('claim_mission', (missionId) => {
     const user = db.users[currentUserId];
     if (!user || !user.missions) return;
@@ -343,7 +345,7 @@ io.on('connection', (socket) => {
     const mission = user.missions.find(m => m.id === missionId);
     if (mission && mission.current >= mission.goal) {
       user.coins = (user.coins || 0) + mission.reward;
-      mission.current = 0; // ループ型ミッション
+      mission.current = 0;
       saveData();
       broadcastUserList();
       socket.emit('system_alert', `🎉 ミッションクリア！ ${mission.reward} コインを獲得しました！`);
@@ -385,7 +387,7 @@ io.on('connection', (socket) => {
     });
   });
 
-  // 切断処理
+  // 切断
   socket.on('disconnect', () => {
     if (currentUserId && db.users[currentUserId]) {
       db.users[currentUserId].isOnline = false;
