@@ -190,7 +190,6 @@
       <div class="sidebar-header">👑 管理者パネル</div>
       <div style="padding: 15px;">
         
-        <!-- 未ログインフォーム -->
         <div id="admin-login-box">
           <form onsubmit="event.preventDefault(); submitAdminCode();">
             <div style="font-size: 12px; margin-bottom: 5px; font-weight: bold;">管理者パスワード入力:</div>
@@ -199,7 +198,6 @@
           </form>
         </div>
 
-        <!-- 認証成功時のみ展開されるエリア -->
         <div id="admin-active-box" style="display: none;">
           <div style="color: #27ae60; font-weight: bold; font-size: 12px; margin-bottom: 12px;">🔓 管理者権限認証済み</div>
           <button onclick="openReportChat()" style="width: 100%; background: #8e44ad; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 8px;">📢 通報・報告ルーム</button>
@@ -733,7 +731,15 @@
       });
     }
 
-    function buyStamp(stampId) { socket.emit('buy_stamp', stampId); }
+    function buyStamp(stampId) {
+      const stamp = allStamps.find(s => s.id === stampId);
+      if (!stamp) return;
+
+      const price = Number(stamp.price) || 0;
+      if (confirm(`スタンプ「${stamp.name}」を ${price} コインで購入しますか？`)) {
+        socket.emit('buy_stamp', stampId);
+      }
+    }
 
     function toggleStampPicker() {
       const picker = document.getElementById('stamp-picker');
