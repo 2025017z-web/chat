@@ -13,6 +13,7 @@ const io = new Server(server, {
 
 app.use(express.static(__dirname));
 
+// 🔑 管理者コード（ここを好きな文字・パスワードに変更してください！）
 const ADMIN_CODE = "admin123";
 
 // --- データ保存処理 ---
@@ -39,7 +40,7 @@ const onlineSockets = {}; // userId -> socketId
 
 io.on('connection', (socket) => {
 
-  // 1. ユーザー初期化（クライアント側バックアップからの自動復元機能付き）
+  // 1. ユーザー初期化（サーバー再起動時のフレンド相互自動復元付き）
   socket.on('register', ({ userId, name, savedFriends, savedRequests }) => {
     socket.userId = userId;
     onlineSockets[userId] = socket.id;
@@ -53,7 +54,7 @@ io.on('connection', (socket) => {
         bannedUntil: 0
       };
     } else {
-      // サーバー再起動（15分スリープ）対策：ローカル記憶からフレンドを自動復元・統合
+      db.users[userId].name = name;
       if (Array.isArray(savedFriends)) {
         savedFriends.forEach(fId => {
           if (!db.users[userId].friends.includes(fId)) db.users[userId].friends.push(fId);
@@ -64,8 +65,17 @@ io.on('connection', (socket) => {
           if (!db.users[userId].requestsSent.includes(rId)) db.users[userId].requestsSent.push(rId);
         });
       }
-      db.users[userId].name = name;
     }
+
+    // サーバーファイル消滅時対策：相手側のリストにも相互復元
+    if (Array.isArray(savedFriends)) {
+      savedFriends.forEach(fId => {
+        if (db.users[fId]) {
+          if (!db.users[fId].friends.includes(userId)) db.users[fId].friends.push(userId);
+        }
+      });
+    }
+
     saveData();
     broadcastUserList();
   });
