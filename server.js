@@ -13,8 +13,8 @@ const io = new Server(server, {
 
 app.use(express.static(__dirname));
 
-// 🔑 管理者コード（ここを好きな文字・パスワードに変更してください！）
-const ADMIN_CODE = "hamsteromu";
+// 🔑 管理者コード
+const ADMIN_CODE = "admin123";
 
 // --- データ保存処理 ---
 const DATA_FILE = path.join(__dirname, 'chat_data.json');
@@ -36,25 +36,43 @@ function saveData() {
   }
 }
 
+// 日本時間（JST）の時刻フォーマット関数
+function getJSTime() {
+  return new Date().toLocaleTimeString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+}
+
+// 名前の安全なサニタイズ（最大20文字）
+function sanitizeName(name) {
+  if (!name || typeof name !== 'string') return '名無し';
+  return name.trim().slice(0, 20);
+}
+
 const onlineSockets = {}; // userId -> socketId
 
 io.on('connection', (socket) => {
 
-  // 1. ユーザー初期化（サーバー再起動時のフレンド相互自動復元付き）
+  // 1. ユーザー初期化
   socket.on('register', ({ userId, name, savedFriends, savedRequests }) => {
     socket.userId = userId;
     onlineSockets[userId] = socket.id;
 
+    const safeName = sanitizeName(name);
+
     if (!db.users[userId]) {
       db.users[userId] = {
         userId,
-        name,
+        name: safeName,
         friends: Array.isArray(savedFriends) ? savedFriends : [],
         requestsSent: Array.isArray(savedRequests) ? savedRequests : [],
         bannedUntil: 0
       };
     } else {
-      db.users[userId].name = name;
+      db.users[userId].name = safeName;
       if (Array.isArray(savedFriends)) {
         savedFriends.forEach(fId => {
           if (!db.users[userId].friends.includes(fId)) db.users[userId].friends.push(fId);
@@ -67,11 +85,10 @@ io.on('connection', (socket) => {
       }
     }
 
-    // サーバーファイル消滅時対策：相手側のリストにも相互復元
     if (Array.isArray(savedFriends)) {
       savedFriends.forEach(fId => {
-        if (db.users[fId]) {
-          if (!db.users[fId].friends.includes(userId)) db.users[fId].friends.push(userId);
+        if (db.users[fId] && !db.users[fId].friends.includes(userId)) {
+          db.users[fId].friends.push(userId);
         }
       });
     }
@@ -83,8 +100,9 @@ io.on('connection', (socket) => {
   // 2. 名前変更
   socket.on('change_name', ({ newName }) => {
     const userId = socket.userId;
-    if (db.users[userId] && newName.trim()) {
-      db.users[userId].name = newName.trim();
+    const safeName = sanitizeName(newName);
+    if (db.users[userId] && safeName) {
+      db.users[userId].name = safeName;
       saveData();
       broadcastUserList();
     }
@@ -136,7 +154,7 @@ io.on('connection', (socket) => {
     socket.emit('chat_history', { userA: u1, userB: u2, partnerId: u2, messages: history });
   });
 
-  // 5. メッセージ送信
+  // 5. メッセージ送信（時刻修正適用）
   socket.on('send_message', ({ toUserId, text, file, impersonateUserId }) => {
     if (isBanned(socket.userId)) {
       return socket.emit('error_message', '現在使用禁止（BAN）に設定されています。');
@@ -157,7 +175,8 @@ io.on('connection', (socket) => {
       toUserId: toUserId,
       text: text,
       file: file,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      time: getJSTime(), // 日本時間（JST）で固定
+      timestamp: Date.now(),
       read: false
     };
 
@@ -204,15 +223,14 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 👑 管理者機能：一斉アナウンス配信
+  // 👑 管理者アナウンス
   socket.on('admin_broadcast_alert', ({ message, playSound }) => {
     if (!socket.isAdmin) return;
-
     const sender = db.users[socket.userId];
     const senderName = sender ? sender.name : "管理者";
 
     io.emit('receive_broadcast_alert', {
-      title: `📢 ${senderName} からの一斉緊急アナウンス`,
+      title: `📢 ${senderName} からの一斉アナウンス`,
       message: message,
       playSound: playSound
     });
@@ -235,8 +253,9 @@ io.on('connection', (socket) => {
 
   socket.on('admin_rename_user', ({ targetUserId, newName }) => {
     if (!socket.isAdmin) return;
-    if (db.users[targetUserId] && newName.trim()) {
-      db.users[targetUserId].name = newName.trim();
+    const safeName = sanitizeName(newName);
+    if (db.users[targetUserId] && safeName) {
+      db.users[targetUserId].name = safeName;
       saveData();
       broadcastUserList();
     }
@@ -274,6 +293,7 @@ io.on('connection', (socket) => {
 
     const pairMap = new Set();
     const chatPairs = [];
+    
     db.messages.forEach(m => {
       if (m.toUserId === 'ADMIN_REPORT_ROOM') return;
       const key = [m.fromUserId, m.toUserId].sort().join('_');
@@ -281,13 +301,11 @@ io.on('connection', (socket) => {
         pairMap.add(key);
         const u1 = db.users[m.fromUserId];
         const u2 = db.users[m.toUserId];
-        if (u1 && u2) {
-          chatPairs.push({ userA: u1, userB: u2 });
-        }
+        if (u1 && u2) chatPairs.push({ userA: u1, userB: u2 });
       }
     });
 
-    io.emit('user_list_update', { users: userList, chatPairs });
+    io.emit('user_list_update', { users: userList, chatPairs, messages: db.messages });
   }
 
   function isBanned(userId) {
