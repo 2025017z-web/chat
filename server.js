@@ -260,13 +260,20 @@ io.on('connection', (socket) => {
 
     if (!u || !stamp) return;
     if (u.ownedStamps.includes(stampId)) return socket.emit('error_message', 'すでに所有しています。');
-    if (u.coins < stamp.price) return socket.emit('error_message', 'コインが足りません！');
 
-    u.coins -= stamp.price;
+    const price = Number(stamp.price) || 0;
+    const currentCoins = Number(u.coins) || 0;
+
+    if (currentCoins < price) {
+      return socket.emit('error_message', `コインが足りません！（必要: ${price}コイン / 所持: ${currentCoins}コイン）`);
+    }
+
+    u.coins = currentCoins - price;
     u.ownedStamps.push(stampId);
 
     if (stamp.creatorId && db.users[stamp.creatorId]) {
-      db.users[stamp.creatorId].coins += stamp.price;
+      const creatorCoins = Number(db.users[stamp.creatorId].coins) || 0;
+      db.users[stamp.creatorId].coins = creatorCoins + price;
     }
 
     updateMissionProgress(u, 'buy', 1);
