@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>chat</title>
+  <title>chat</title></title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306C755'><path d='M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/></svg>">
   <script src="/socket.io/socket.io.js"></script>
   <style>
@@ -11,74 +11,75 @@
     body { display: flex; height: 100vh; background-color: #f5f5f5; overflow: hidden; }
 
     /* モーダル */
-    #modal-overlay {
+    .modal-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000;
     }
-    .modal-box { background: white; padding: 25px; border-radius: 12px; text-align: center; width: 320px; }
-    .modal-box input, .modal-box textarea { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px; }
-    .modal-box button { background: #06C755; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; }
+    .modal-box { background: white; padding: 25px; border-radius: 12px; text-align: center; width: 340px; max-height: 90vh; overflow-y: auto; }
+    .modal-box input, .modal-box textarea, .modal-box select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 6px; }
+    .modal-box button { background: #06C755; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 5px; }
 
     #alert-modal-overlay {
       display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(0,0,0,0.85); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; color: white;
     }
-    .alert-card {
-      background: #222; border: 3px solid #ff4757; border-radius: 15px; padding: 30px; width: 85%; max-width: 500px; text-align: center; box-shadow: 0 0 20px rgba(255, 71, 87, 0.5);
-    }
+    .alert-card { background: #222; border: 3px solid #ff4757; border-radius: 15px; padding: 30px; width: 85%; max-width: 500px; text-align: center; }
 
-    /* LINE風ナビゲーションバー（最左列） */
+    /* LINE風ナビバー */
     #navbar { width: 60px; background: #2c3440; display: flex; flex-direction: column; align-items: center; padding-top: 20px; gap: 20px; z-index: 10; }
-    .nav-item { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #8a99ad; cursor: pointer; font-size: 20px; transition: 0.2s; position: relative; }
+    .nav-item { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #8a99ad; cursor: pointer; font-size: 20px; transition: 0.2s; position: relative; }
     .nav-item:hover, .nav-item.active { color: white; background: #3d4756; }
-    .nav-badge { position: absolute; top: 2px; right: 2px; background: #ff4757; color: white; font-size: 10px; font-weight: bold; border-radius: 10px; padding: 2px 5px; }
 
-    /* サイドバー（サブパネル） */
-    #sidebar { width: 300px; background: #ffffff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
+    /* サイドバー */
+    #sidebar { width: 310px; background: #ffffff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
     .tab-content { display: none; flex-direction: column; height: 100%; }
     .tab-content.active { display: flex; }
 
     .sidebar-header { padding: 15px; font-size: 18px; font-weight: bold; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fbfbfb; }
 
-    /* プロフィールカード（ホーム画面） */
-    .profile-card { padding: 20px; background: #f8f9fa; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 15px; }
-    .profile-avatar { width: 50px; height: 50px; border-radius: 50%; background: #06C755; color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; flex-shrink: 0; }
-    .profile-info { overflow: hidden; flex: 1; }
-    .profile-name { font-weight: bold; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* プロフィール＆コイン表示 */
+    .profile-card { padding: 15px; background: #f8f9fa; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 12px; }
+    .profile-avatar { width: 48px; height: 48px; border-radius: 50%; background: #06C755; color: white; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; flex-shrink: 0; background-size: cover; background-position: center; }
+    .profile-info { flex: 1; overflow: hidden; }
+    .profile-name { font-weight: bold; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .coin-badge { display: inline-block; background: #ffeaa7; color: #d35400; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; margin-top: 3px; }
 
     .section-title { background: #f0f0f0; padding: 6px 15px; font-size: 11px; font-weight: bold; color: #777; border-bottom: 1px solid #e5e5e5; }
     .item-list { flex: 1; overflow-y: auto; }
-    
-    /* リスト項目 (長い名前の省略化対応) */
-    .list-item { display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #f5f5f5; gap: 12px; cursor: pointer; transition: 0.1s; }
-    .list-item:hover { background: #f8f9fa; }
-    .avatar { width: 42px; height: 42px; border-radius: 50%; background: #ccc; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; flex-shrink: 0; position: relative; }
-    .avatar.online::after { content: ''; position: absolute; bottom: 0; right: 0; width: 10px; height: 10px; background: #06C755; border-radius: 50%; border: 2px solid white; }
-    
-    .item-body { flex: 1; min-width: 0; } /* min-width: 0 が文字省略に必須 */
-    .item-title { font-weight: bold; font-size: 14px; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .item-sub { font-size: 12px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 
-    .btn-sm { padding: 4px 8px; border-radius: 12px; border: none; font-size: 11px; cursor: pointer; flex-shrink: 0; font-weight: bold; }
+    .list-item { display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #f5f5f5; gap: 12px; cursor: pointer; }
+    .list-item:hover { background: #f8f9fa; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; background: #ccc; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; flex-shrink: 0; background-size: cover; background-position: center; position: relative; }
+    .avatar.online::after { content: ''; position: absolute; bottom: 0; right: 0; width: 10px; height: 10px; background: #06C755; border-radius: 50%; border: 2px solid white; }
+
+    .item-body { flex: 1; min-width: 0; }
+    .item-title { font-weight: bold; font-size: 14px; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .item-sub { font-size: 12px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .btn-sm { padding: 4px 10px; border-radius: 12px; border: none; font-size: 11px; cursor: pointer; font-weight: bold; }
     .btn-add { background: #06C755; color: white; }
     .btn-pending { background: #e0e0e0; color: #888; cursor: default; }
 
-    /* チャットエリア */
-    #chat-container { flex: 1; display: flex; flex-direction: column; background: #7293c2; }
-    .chat-header { background: #ffffff; color: #333; padding: 12px 15px; font-weight: bold; border-bottom: 1px solid #e0e0e0; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-    .chat-header-title { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* スタンプショップグリッド */
+    .stamp-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 10px; }
+    .stamp-card { border: 1px solid #eee; border-radius: 8px; padding: 10px; text-align: center; background: #fff; }
+    .stamp-card img { width: 60px; height: 60px; object-fit: contain; margin-bottom: 5px; }
 
-    .impersonate-bar { display: none; background: #1a1e29; color: white; padding: 8px; border-radius: 6px; align-items: center; gap: 10px; font-size: 12px; }
-    .imp-user-btn { background: #444; color: white; border: 1px solid #666; padding: 4px 10px; border-radius: 12px; cursor: pointer; font-size: 11px; }
+    /* メインチャット画面 */
+    #chat-container { flex: 1; display: flex; flex-direction: column; background-color: #7293c2; background-size: cover; background-position: center; }
+    .chat-header { background: #ffffff; color: #333; padding: 12px 15px; font-weight: bold; border-bottom: 1px solid #e0e0e0; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+
+    .impersonate-bar { display: none; background: #1a1e29; color: white; padding: 6px 10px; border-radius: 6px; align-items: center; gap: 10px; font-size: 12px; }
+    .imp-user-btn { background: #444; color: white; border: 1px solid #666; padding: 3px 8px; border-radius: 10px; cursor: pointer; font-size: 11px; }
     .imp-user-btn.active { background: #06C755; border-color: #06C755; }
 
     .message-area { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-    
+
     .msg-row { display: flex; flex-direction: column; max-width: 70%; }
     .msg-row.me { align-self: flex-end; align-items: flex-end; }
     .msg-row.other { align-self: flex-start; align-items: flex-start; }
-    .msg-sender { font-size: 11px; color: #ffffff; margin-bottom: 3px; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
-    
+    .msg-sender { font-size: 11px; color: #ffffff; margin-bottom: 3px; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+
     .msg-body { display: flex; align-items: flex-end; gap: 5px; }
     .me .msg-body { flex-direction: row; }
     .other .msg-body { flex-direction: row-reverse; }
@@ -89,58 +90,84 @@
     .msg-bubble { padding: 9px 13px; border-radius: 15px; font-size: 14px; word-break: break-all; white-space: pre-wrap; line-height: 1.4; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
     .me .msg-bubble { background: #85e249; color: #000; border-top-right-radius: 2px; }
     .other .msg-bubble { background: #ffffff; color: #000; border-top-left-radius: 2px; }
-    .msg-media { max-width: 240px; max-height: 240px; border-radius: 8px; margin-top: 5px; display: block; }
 
-    .input-area { background: #ffffff; padding: 10px 15px; display: flex; gap: 10px; align-items: center; border-top: 1px solid #eee; }
+    .msg-stamp { width: 120px; height: 120px; object-fit: contain; }
+    .msg-media { max-width: 220px; max-height: 220px; border-radius: 8px; }
+
+    .input-area { background: #ffffff; padding: 10px 15px; display: flex; gap: 8px; align-items: center; border-top: 1px solid #eee; position: relative; }
     .input-area textarea { flex: 1; height: 38px; border: 1px solid #e0e0e0; border-radius: 18px; padding: 9px 15px; resize: none; outline: none; font-size: 14px; background: #f8f9fa; }
-    .file-btn-label { font-size: 22px; cursor: pointer; color: #666; }
-    .file-btn-label input { display: none; }
+    .action-icon { font-size: 22px; cursor: pointer; color: #666; user-select: none; }
+    .action-icon input { display: none; }
     .send-btn { background: #06C755; color: white; border: none; padding: 8px 16px; border-radius: 18px; cursor: pointer; font-weight: bold; font-size: 13px; }
+
+    /* スタンプ選択ポップアップ */
+    #stamp-picker { display: none; position: absolute; bottom: 60px; left: 10px; background: white; border: 1px solid #ccc; border-radius: 10px; padding: 10px; width: 280px; max-height: 200px; overflow-y: auto; grid-template-columns: repeat(3, 1fr); gap: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; }
+    #stamp-picker img { width: 100%; height: 70px; object-fit: contain; cursor: pointer; border-radius: 6px; padding: 4px; }
+    #stamp-picker img:hover { background: #f0f0f0; }
   </style>
 </head>
 <body>
 
-  <!-- 名前入力モーダル -->
-  <div id="modal-overlay">
+  <!-- 名前登録モーダル -->
+  <div id="modal-overlay" class="modal-overlay">
     <div class="modal-box">
-      <h3 style="margin-bottom: 10px;">名前を入力（最大20文字）</h3>
+      <h3>名前を入力（最大20文字）</h3>
       <input type="text" id="username-input" maxlength="20" placeholder="例: たろう">
       <button onclick="saveName()">はじめる</button>
     </div>
   </div>
 
-  <!-- 管理者アナウンスモーダル -->
-  <div id="broadcast-modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; align-items: center; justify-content: center;">
-    <div class="modal-box" style="width: 360px;">
-      <h3 style="color: #ff4757; margin-bottom: 10px;">📢 一斉アナウンス送信</h3>
-      <textarea id="broadcast-msg-input" placeholder="メッセージを入力" style="height: 90px;"></textarea>
-      <div style="margin: 10px 0; font-size: 13px; text-align: left;">
-        <label style="cursor: pointer;"><input type="checkbox" id="broadcast-sound-checkbox" checked> 🔊 警告音を鳴らす</label>
-      </div>
-      <div style="display: flex; gap: 10px;">
-        <button onclick="closeBroadcastPrompt()" style="background: #ccc; color: #333;">キャンセル</button>
-        <button onclick="submitBroadcastAlert()" style="background: #ff4757;">送信</button>
+  <!-- プロフィール・背景変更モーダル -->
+  <div id="profile-modal-overlay" class="modal-overlay" style="display: none;">
+    <div class="modal-box">
+      <h3>🎨 プロフィール＆背景設定</h3>
+      <div style="text-align: left; font-size: 12px; margin-top: 10px;">名前:</div>
+      <input type="text" id="edit-name-input" maxlength="20">
+      <div style="text-align: left; font-size: 12px; margin-top: 5px;">アイコン画像 (画像を選択):</div>
+      <input type="file" id="edit-avatar-file" accept="image/*">
+      <div style="text-align: left; font-size: 12px; margin-top: 5px;">トーク画面背景画像:</div>
+      <input type="file" id="edit-bg-file" accept="image/*">
+      <div style="display: flex; gap: 8px; margin-top: 10px;">
+        <button onclick="closeProfileModal()" style="background: #ccc; color: #333;">キャンセル</button>
+        <button onclick="submitProfileChanges()">保存</button>
       </div>
     </div>
   </div>
 
-  <!-- 緊急表示用ポップアップ -->
+  <!-- スタンプ作成モーダル -->
+  <div id="create-stamp-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-box">
+      <h3>🎨 スタンプ自作＆販売</h3>
+      <input type="text" id="stamp-name-input" placeholder="スタンプ名">
+      <input type="number" id="stamp-price-input" placeholder="価格 (コイン)" value="50">
+      <div style="text-align: left; font-size: 12px; margin-top: 5px;">スタンプ画像:</div>
+      <input type="file" id="stamp-image-file" accept="image/*">
+      <div style="display: flex; gap: 8px; margin-top: 10px;">
+        <button onclick="closeStampModal()" style="background: #ccc; color: #333;">キャンセル</button>
+        <button onclick="submitNewStamp()">出品・登録</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 緊急アナウンス表示用 -->
   <div id="alert-modal-overlay">
     <div class="alert-card">
-      <h1 id="alert-title" style="color: #ff4757; font-size: 20px; margin-bottom: 10px;">📢 緊急アナウンス</h1>
-      <p id="alert-body" style="font-size: 15px; line-height: 1.5; margin-bottom: 20px; white-space: pre-wrap; font-weight: bold;"></p>
+      <h1 id="alert-title" style="color: #ff4757; font-size: 20px; margin-bottom: 10px;">📢 お知らせ</h1>
+      <p id="alert-body" style="font-size: 14px; line-height: 1.5; margin-bottom: 20px; white-space: pre-wrap; font-weight: bold;"></p>
       <button onclick="closeAlertModal()" style="background: #ff4757; color: white; border: none; padding: 10px 25px; border-radius: 6px; cursor: pointer; font-weight: bold;">確認</button>
     </div>
   </div>
 
-  <!-- ナビゲーションバー (左端) -->
+  <!-- 1. ナビゲーションバー -->
   <div id="navbar">
     <div class="nav-item active" title="ホーム" onclick="switchTab('tab-home', this)">🏠</div>
     <div class="nav-item" title="トーク" onclick="switchTab('tab-chats', this)">💬</div>
+    <div class="nav-item" title="スタンプショップ" onclick="switchTab('tab-shop', this)">🎨</div>
+    <div class="nav-item" title="ミッション" onclick="switchTab('tab-missions', this)">🎯</div>
     <div class="nav-item" id="nav-admin-btn" title="管理者" style="display: none;" onclick="switchTab('tab-admin', this)">👑</div>
   </div>
 
-  <!-- サイドバー -->
+  <!-- 2. サイドバー -->
   <div id="sidebar">
 
     <!-- TAB 1: ホーム -->
@@ -150,12 +177,13 @@
         <div class="profile-avatar" id="my-avatar">?</div>
         <div class="profile-info">
           <div class="profile-name" id="my-name-display">ユーザー名</div>
-          <button onclick="changeMyName()" style="background: none; border: none; color: #4a90e2; font-size: 11px; cursor: pointer; margin-top: 3px;">名前を変更</button>
+          <div class="coin-badge">💰 <span id="my-coins-display">0</span> コイン</div>
+          <div><button onclick="openProfileModal()" style="background: none; border: none; color: #4a90e2; font-size: 11px; cursor: pointer; margin-top: 4px;">プロフィール・背景設定</button></div>
         </div>
       </div>
       <div class="section-title">友達リスト</div>
       <div class="item-list" id="home-friends-list"></div>
-      <div class="section-title">新しい人を探す</div>
+      <div class="section-title">知り合いかも</div>
       <div class="item-list" id="home-others-list"></div>
     </div>
 
@@ -165,43 +193,84 @@
       <div class="item-list" id="chat-threads-list"></div>
     </div>
 
-    <!-- TAB 3: 管理者モード -->
+    <!-- TAB 3: スタンプショップ＆自作 -->
+    <div id="tab-shop" class="tab-content">
+      <div class="sidebar-header">
+        <span>スタンプショップ</span>
+        <button onclick="openStampModal()" style="font-size: 11px; background: #06C755; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">＋ 自作・販売</button>
+      </div>
+      <div class="stamp-grid" id="stamp-shop-grid"></div>
+    </div>
+
+    <!-- TAB 4: ミッション -->
+    <div id="tab-missions" class="tab-content">
+      <div class="sidebar-header">🎯 コインミッション</div>
+      <div class="item-list" id="missions-list">
+        <div class="list-item">
+          <div class="item-body">
+            <div class="item-title">プロフィールを設定しよう</div>
+            <div class="item-sub">報酬: 50 コイン</div>
+          </div>
+          <button class="btn-sm btn-add" onclick="claimMission('PROFILE_UPDATE')">受取</button>
+        </div>
+        <div class="list-item">
+          <div class="item-body">
+            <div class="item-title">友達を1人追加しよう</div>
+            <div class="item-sub">報酬: 100 コイン</div>
+          </div>
+          <button class="btn-sm btn-add" onclick="claimMission('FRIEND_ADD')">受取</button>
+        </div>
+        <div class="list-item">
+          <div class="item-body">
+            <div class="item-title">メッセージを10回送信しよう</div>
+            <div class="item-sub">報酬: 150 コイン</div>
+          </div>
+          <button class="btn-sm btn-add" onclick="claimMission('CHAT_10')">受取</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 5: 管理者モード -->
     <div id="tab-admin" class="tab-content">
       <div class="sidebar-header">👑 管理者設定</div>
       <div style="padding: 15px;">
         <div id="admin-login-box">
-          <input type="password" id="admin-code-input" placeholder="管理者コード" style="width: 100%; padding: 8px; margin-bottom: 8px;">
+          <input type="password" id="admin-code-input" placeholder="パスワード(hamsteromu)" style="width: 100%; padding: 8px; margin-bottom: 8px;">
           <button onclick="submitAdminCode()" style="width: 100%; background: #e67e22; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold;">ログイン</button>
         </div>
         <div id="admin-active-box" style="display: none;">
           <button onclick="openReportChat()" style="width: 100%; background: #8e44ad; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 8px;">📢 通報・報告ルーム</button>
-          <button onclick="openBroadcastPrompt()" style="width: 100%; background: #ff4757; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 15px;">⚡ 全員に一斉アナウンス</button>
+          <button onclick="openBroadcastPrompt()" style="width: 100%; background: #ff4757; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 12px;">⚡ 全員に一斉アナウンス</button>
           <button onclick="logoutAdmin()" style="width: 100%; background: #7f8c8d; color: white; border: none; padding: 6px; border-radius: 4px; cursor: pointer;">ログアウト</button>
         </div>
       </div>
-      <div class="section-title">監視可能なトーク一覧</div>
-      <div class="item-list" id="admin-watch-list"></div>
+      <div class="section-title">ユーザー管理 & リアルタイム監視</div>
+      <div class="item-list" id="admin-user-list"></div>
     </div>
 
   </div>
 
-  <!-- メインチャット画面 -->
+  <!-- 3. メインチャット画面 -->
   <div id="chat-container">
     <div class="chat-header">
       <div class="chat-header-title" id="chat-header-text">トーク相手を選択してください</div>
       <div class="impersonate-bar" id="impersonate-bar">
-        <span>発言者切替:</span>
+        <span>発言者切替(なりすまし):</span>
         <div id="impersonate-btn-group" style="display: flex; gap: 5px;"></div>
       </div>
     </div>
 
     <div class="message-area" id="message-area"></div>
 
+    <!-- スタンプ選択枠 -->
+    <div id="stamp-picker"></div>
+
     <div class="input-area">
-      <label class="file-btn-label" title="添付">📎
+      <span class="action-icon" title="スタンプ" onclick="toggleStampPicker()">😊</span>
+      <label class="action-icon" title="ファイル添付">📎
         <input type="file" id="file-input" onchange="sendFile()">
       </label>
-      <textarea id="text-input" placeholder="メッセージを入力"></textarea>
+      <textarea id="text-input" placeholder="メッセージを入力 (+5コイン)"></textarea>
       <button class="send-btn" onclick="sendText()">送信</button>
     </div>
   </div>
@@ -214,8 +283,7 @@
     let selectedSenderId = null;
     let isAdmin = false;
     let cachedData = { users: [], chatPairs: [], messages: [] };
-    let alertInterval = null;
-    let originalTitle = document.title;
+    let allStamps = [];
 
     if (!myUserId) {
       myUserId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
@@ -223,10 +291,6 @@
     }
 
     window.onload = () => {
-      if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
-        Notification.requestPermission();
-      }
-
       const savedName = localStorage.getItem('chat_username');
       if (savedName) {
         document.getElementById('modal-overlay').style.display = 'none';
@@ -251,7 +315,6 @@
 
     function initUser(name) {
       document.getElementById('my-name-display').innerText = name;
-      document.getElementById('my-avatar').innerText = name.charAt(0);
 
       const savedFriends = JSON.parse(localStorage.getItem('chat_friends_' + myUserId) || '[]');
       const savedRequests = JSON.parse(localStorage.getItem('chat_requests_' + myUserId) || '[]');
@@ -264,25 +327,61 @@
       });
     }
 
-    function changeMyName() {
-      const newName = prompt('新しい名前を入力してください（最大20文字）:');
-      if (newName && newName.trim()) {
-        const safe = newName.trim().slice(0, 20);
-        localStorage.setItem('chat_username', safe);
-        document.getElementById('my-name-display').innerText = safe;
-        document.getElementById('my-avatar').innerText = safe.charAt(0);
-        socket.emit('change_name', { newName: safe });
+    // プロフィール変更
+    function openProfileModal() {
+      const me = cachedData.users.find(u => u.userId === myUserId);
+      if (me) {
+        document.getElementById('edit-name-input').value = me.name;
       }
+      document.getElementById('profile-modal-overlay').style.display = 'flex';
+    }
+    function closeProfileModal() { document.getElementById('profile-modal-overlay').style.display = 'none'; }
+
+    function submitProfileChanges() {
+      const newName = document.getElementById('edit-name-input').value.trim();
+      const avatarFile = document.getElementById('edit-avatar-file').files[0];
+      const bgFile = document.getElementById('edit-bg-file').files[0];
+
+      let avatarBase64 = undefined;
+      let bgBase64 = undefined;
+
+      const readFiles = async () => {
+        if (avatarFile) avatarBase64 = await toBase64(avatarFile);
+        if (bgFile) bgBase64 = await toBase64(bgFile);
+
+        socket.emit('update_profile', {
+          name: newName,
+          avatar: avatarBase64,
+          bgImage: bgBase64
+        });
+        closeProfileModal();
+      };
+      readFiles();
     }
 
+    const toBase64 = file => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = error => reject(error);
+    });
+
+    socket.on('profile_updated_success', ({ name, avatar, bgImage }) => {
+      if (name) {
+        localStorage.setItem('chat_username', name);
+        document.getElementById('my-name-display').innerText = name;
+      }
+      if (bgImage) {
+        document.getElementById('chat-container').style.backgroundImage = `url(${bgImage})`;
+      }
+    });
+
+    // 管理者ログイン (パスワード: hamsteromu)
     function submitAdminCode() {
       const code = document.getElementById('admin-code-input').value;
       socket.emit('admin_auth', { code: code });
     }
-
-    function logoutAdmin() {
-      socket.emit('admin_logout');
-    }
+    function logoutAdmin() { socket.emit('admin_logout'); }
 
     socket.on('admin_auth_result', ({ success }) => {
       if (success) {
@@ -291,9 +390,9 @@
         document.getElementById('admin-active-box').style.display = 'block';
         document.getElementById('nav-admin-btn').style.display = 'flex';
         updateUI();
-        alert('👑 管理者モード有効');
+        alert('👑 管理者モードでログインしました');
       } else {
-        alert('コードが違います');
+        alert('パスワードが違います');
       }
     });
 
@@ -311,10 +410,18 @@
       cachedData = data;
       const me = data.users.find(u => u.userId === myUserId);
       if (me) {
-        localStorage.setItem('chat_friends_' + myUserId, JSON.stringify(me.friends));
-        localStorage.setItem('chat_requests_' + myUserId, JSON.stringify(me.requestsSent));
+        document.getElementById('my-coins-display').innerText = me.coins || 0;
+        document.getElementById('my-avatar').innerText = me.avatar ? '' : me.name.charAt(0);
+        if (me.avatar) document.getElementById('my-avatar').style.backgroundImage = `url(${me.avatar})`;
+        if (me.bgImage) document.getElementById('chat-container').style.backgroundImage = `url(${me.bgImage})`;
       }
       updateUI();
+    });
+
+    socket.on('update_stamps_list', (stamps) => {
+      allStamps = stamps;
+      renderStampShop();
+      renderStampPicker();
     });
 
     function updateUI() {
@@ -336,8 +443,9 @@
         const item = document.createElement('div');
         item.className = 'list-item';
 
+        const avatarStyle = user.avatar ? `background-image: url(${user.avatar});` : '';
         item.innerHTML = `
-          <div class="avatar ${user.isOnline ? 'online' : ''}">${user.name.charAt(0)}</div>
+          <div class="avatar ${user.isOnline ? 'online' : ''}" style="${avatarStyle}">${user.avatar ? '' : user.name.charAt(0)}</div>
           <div class="item-body">
             <div class="item-title">${user.name}</div>
             <div class="item-sub">${user.isOnline ? 'オンライン' : 'オフライン'}</div>
@@ -348,20 +456,16 @@
           item.onclick = () => selectPartner(user.userId, user.name);
           friendsList.appendChild(item);
 
-          // トーク一覧にも生成
           const threadItem = item.cloneNode(true);
           threadItem.onclick = () => selectPartner(user.userId, user.name);
-          
-          // 最新メッセージ取得
           const lastMsg = cachedData.messages.filter(m => 
             (m.fromUserId === myUserId && m.toUserId === user.userId) ||
             (m.fromUserId === user.userId && m.toUserId === myUserId)
           ).pop();
 
           if (lastMsg) {
-            threadItem.querySelector('.item-sub').innerText = lastMsg.text || (lastMsg.file ? '[ファイル]' : '');
+            threadItem.querySelector('.item-sub').innerText = lastMsg.stampUrl ? '[スタンプ]' : (lastMsg.text || '[ファイル]');
           }
-
           chatThreadsList.appendChild(threadItem);
 
         } else {
@@ -379,10 +483,11 @@
         }
       });
 
-      // 👑 管理者監視リスト更新
+      // 👑 管理者用ユーザーリスト
       if (isAdmin) {
-        const watchList = document.getElementById('admin-watch-list');
-        watchList.innerHTML = '';
+        const adminUserList = document.getElementById('admin-user-list');
+        adminUserList.innerHTML = '';
+        
         cachedData.chatPairs.forEach(pair => {
           const item = document.createElement('div');
           item.className = 'list-item';
@@ -390,12 +495,32 @@
             <div class="avatar">👁️</div>
             <div class="item-body">
               <div class="item-title">${pair.userA.name} ↔ ${pair.userB.name}</div>
+              <div class="item-sub">クリックで監視＆なりすまし送信</div>
             </div>
           `;
           item.onclick = () => watchPair(pair.userA, pair.userB);
-          watchList.appendChild(item);
+          adminUserList.appendChild(item);
+        });
+
+        cachedData.users.forEach(user => {
+          if (user.userId === myUserId) return;
+          const item = document.createElement('div');
+          item.className = 'list-item';
+          item.innerHTML = `
+            <div class="avatar">${user.name.charAt(0)}</div>
+            <div class="item-body">
+              <div class="item-title">${user.name} ${user.isBanned ? '⛔ (BAN中)' : ''}</div>
+              <div class="item-sub">コイン: ${user.coins}</div>
+            </div>
+            <button class="btn-sm" style="background:#e74c3c; color:white; margin-right:4px;" onclick="adminBanUser('${user.userId}')">BAN</button>
+            <button class="btn-sm" style="background:#3498db; color:white;" onclick="adminRenameUser('${user.userId}')">名変</button>
+          `;
+          adminUserList.appendChild(item);
         });
       }
+
+      renderStampShop();
+      renderStampPicker();
     }
 
     function selectPartner(partnerId, partnerName) {
@@ -468,8 +593,17 @@
       const toUserId = (watchedUserB === 'ADMIN_REPORT_ROOM') ? 'ADMIN_REPORT_ROOM' : ((selectedSenderId === watchedUserA) ? watchedUserB : watchedUserA);
       const impersonateUserId = (isAdmin && selectedSenderId !== myUserId && watchedUserB !== 'ADMIN_REPORT_ROOM') ? selectedSenderId : null;
 
-      socket.emit('send_message', { toUserId, text, file: null, impersonateUserId });
+      socket.emit('send_message', { toUserId, text, file: null, stampUrl: null, impersonateUserId });
       input.value = '';
+    }
+
+    function sendStamp(stampUrl) {
+      if (!watchedUserB) return alert('トーク相手を選択してください');
+      const toUserId = (watchedUserB === 'ADMIN_REPORT_ROOM') ? 'ADMIN_REPORT_ROOM' : ((selectedSenderId === watchedUserA) ? watchedUserB : watchedUserA);
+      const impersonateUserId = (isAdmin && selectedSenderId !== myUserId && watchedUserB !== 'ADMIN_REPORT_ROOM') ? selectedSenderId : null;
+
+      socket.emit('send_message', { toUserId, text: '', file: null, stampUrl, impersonateUserId });
+      document.getElementById('stamp-picker').style.display = 'none';
     }
 
     function sendFile() {
@@ -482,7 +616,7 @@
 
       const reader = new FileReader();
       reader.onload = function(e) {
-        socket.emit('send_message', { toUserId, text: '', file: { name: file.name, type: file.type, data: e.target.result }, impersonateUserId });
+        socket.emit('send_message', { toUserId, text: '', file: { name: file.name, type: file.type, data: e.target.result }, stampUrl: null, impersonateUserId });
         fileInput.value = '';
       };
       reader.readAsDataURL(file);
@@ -492,13 +626,6 @@
       const isCurrentPair = (watchedUserB === 'ADMIN_REPORT_ROOM' && msg.toUserId === 'ADMIN_REPORT_ROOM') ||
                           (msg.fromUserId === watchedUserA && msg.toUserId === watchedUserB) ||
                           (msg.fromUserId === watchedUserB && msg.toUserId === watchedUserA);
-
-      if (msg.fromUserId !== myUserId && (!isCurrentPair || document.hidden)) {
-        playBeepSound();
-        if ("Notification" in window && Notification.permission === "granted") {
-          new Notification(`${msg.fromName} からメッセージ`, { body: msg.text || 'ファイルを送信しました' });
-        }
-      }
 
       if (!isCurrentPair) return;
 
@@ -525,22 +652,28 @@
       body.className = 'msg-body';
 
       const bubble = document.createElement('div');
-      bubble.className = 'msg-bubble';
 
-      if (msg.text) bubble.innerText = msg.text;
-
-      if (msg.file) {
-        if (msg.file.type.startsWith('image/')) {
-          const img = document.createElement('img');
-          img.src = msg.file.data;
-          img.className = 'msg-media';
-          bubble.appendChild(img);
-        } else {
-          const a = document.createElement('a');
-          a.href = msg.file.data;
-          a.download = msg.file.name;
-          a.innerText = `📎 ${msg.file.name}`;
-          bubble.appendChild(a);
+      if (msg.stampUrl) {
+        const img = document.createElement('img');
+        img.src = msg.stampUrl;
+        img.className = 'msg-stamp';
+        bubble.appendChild(img);
+      } else {
+        bubble.className = 'msg-bubble';
+        if (msg.text) bubble.innerText = msg.text;
+        if (msg.file) {
+          if (msg.file.type.startsWith('image/')) {
+            const img = document.createElement('img');
+            img.src = msg.file.data;
+            img.className = 'msg-media';
+            bubble.appendChild(img);
+          } else {
+            const a = document.createElement('a');
+            a.href = msg.file.data;
+            a.download = msg.file.name;
+            a.innerText = `📎 ${msg.file.name}`;
+            bubble.appendChild(a);
+          }
         }
       }
 
@@ -565,39 +698,102 @@
       messageArea.appendChild(row);
     }
 
-    function openBroadcastPrompt() { document.getElementById('broadcast-modal-overlay').style.display = 'flex'; }
-    function closeBroadcastPrompt() { document.getElementById('broadcast-modal-overlay').style.display = 'none'; }
-    function submitBroadcastAlert() {
-      const msg = document.getElementById('broadcast-msg-input').value.trim();
-      const playSound = document.getElementById('broadcast-sound-checkbox').checked;
-      if (!msg) return alert('メッセージを入力してください');
-      socket.emit('admin_broadcast_alert', { message: msg, playSound });
-      closeBroadcastPrompt();
+    // スタンプ画面処理
+    function openStampModal() { document.getElementById('create-stamp-modal').style.display = 'flex'; }
+    function closeStampModal() { document.getElementById('create-stamp-modal').style.display = 'none'; }
+
+    async function submitNewStamp() {
+      const name = document.getElementById('stamp-name-input').value.trim();
+      const price = document.getElementById('stamp-price-input').value;
+      const file = document.getElementById('stamp-image-file').files[0];
+
+      if (!name || !file) return alert('スタンプ名と画像を選択してください');
+
+      const imageUrl = await toBase64(file);
+      socket.emit('create_stamp', { name, imageUrl, price });
+      closeStampModal();
     }
 
-    socket.on('receive_broadcast_alert', ({ title, message, playSound }) => {
+    function renderStampShop() {
+      const me = cachedData.users.find(u => u.userId === myUserId);
+      const grid = document.getElementById('stamp-shop-grid');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      allStamps.forEach(stamp => {
+        const isOwned = me && me.ownedStamps && me.ownedStamps.includes(stamp.id);
+        const card = document.createElement('div');
+        card.className = 'stamp-card';
+        card.innerHTML = `
+          <img src="${stamp.imageUrl}">
+          <div style="font-size:12px; font-weight:bold;">${stamp.name}</div>
+          <div style="font-size:11px; color:#e67e22; margin: 3px 0;">💰 ${stamp.price}</div>
+          <button class="btn-sm ${isOwned ? 'btn-pending' : 'btn-add'}" style="width:100%;" ${isOwned ? 'disabled' : ''} onclick="buyStamp('${stamp.id}')">
+            ${isOwned ? '所有済み' : '購入'}
+          </button>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function buyStamp(stampId) {
+      socket.emit('buy_stamp', stampId);
+    }
+
+    function toggleStampPicker() {
+      const picker = document.getElementById('stamp-picker');
+      picker.style.display = (picker.style.display === 'grid') ? 'none' : 'grid';
+    }
+
+    function renderStampPicker() {
+      const me = cachedData.users.find(u => u.userId === myUserId);
+      const picker = document.getElementById('stamp-picker');
+      if (!picker) return;
+      picker.innerHTML = '';
+
+      if (me && me.ownedStamps) {
+        me.ownedStamps.forEach(sId => {
+          const stamp = allStamps.find(s => s.id === sId);
+          if (stamp) {
+            const img = document.createElement('img');
+            img.src = stamp.imageUrl;
+            img.onclick = () => sendStamp(stamp.imageUrl);
+            picker.appendChild(img);
+          }
+        });
+      }
+    }
+
+    function claimMission(missionId) {
+      socket.emit('claim_mission', missionId);
+    }
+
+    // 管理者アクション
+    function adminBanUser(targetUserId) {
+      const mins = prompt('何分間BANしますか？', '60');
+      if (mins) socket.emit('admin_ban_user', { targetUserId, minutes: parseInt(mins) });
+    }
+
+    function adminRenameUser(targetUserId) {
+      const newName = prompt('新しい名前を入力してください:');
+      if (newName) socket.emit('admin_rename_user', { targetUserId, newName });
+    }
+
+    // アナウンス
+    function openBroadcastPrompt() {
+      const msg = prompt('全員に送信するアナウンスを入力してください:');
+      if (msg) socket.emit('admin_broadcast_alert', { message: msg, playSound: true });
+    }
+
+    socket.on('receive_broadcast_alert', ({ title, message }) => {
       document.getElementById('alert-title').innerText = title;
       document.getElementById('alert-body').innerText = message;
       document.getElementById('alert-modal-overlay').style.display = 'flex';
-      if (playSound) playBeepSound();
     });
 
     function closeAlertModal() { document.getElementById('alert-modal-overlay').style.display = 'none'; }
 
-    function playBeepSound() {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.frequency.setValueAtTime(880, ctx.currentTime);
-        gain.gain.setValueAtTime(0.2, ctx.currentTime);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.3);
-      } catch (e) {}
-    }
-
+    socket.on('system_alert', (msg) => alert(msg));
     socket.on('error_message', (msg) => alert(msg));
   </script>
 </body>
