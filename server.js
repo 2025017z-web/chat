@@ -13,10 +13,9 @@ const io = new Server(server, {
 
 app.use(express.static(__dirname));
 
-const ADMIN_CODE = "adminiwamoto";
+const ADMIN_CODE = "hamsteromu";
 const DATA_FILE = path.join(__dirname, 'chat_data.json');
 
-// バグらないインラインSVGスタンプデータ
 const STAMP_HIYOKO = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='55' r='35' fill='%23FFD700'/><circle cx='35' cy='45' r='5' fill='%23000'/><circle cx='65' cy='45' r='5' fill='%23000'/><polygon points='50,50 38,62 62,62' fill='%23FF6B6B'/></svg>";
 const STAMP_GOOD = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%234cd137'/><path d='M35 50 L45 60 L65 40' stroke='white' stroke-width='8' fill='none' stroke-linecap='round'/></svg>";
 
@@ -57,7 +56,6 @@ function sanitizeName(name) {
   return name.trim().slice(0, 20);
 }
 
-// ユーザーの初期無尽蔵ミッションを生成
 function generateInitialMissions() {
   return [
     { id: 'm_chat', type: 'chat', title: 'メッセージを送信しよう', goal: 5, current: 0, reward: 50 },
@@ -142,7 +140,6 @@ io.on('connection', (socket) => {
 
   socket.on('get_chat_history', ({ partnerId, userA, userB }) => {
     if (partnerId === 'ADMIN_REPORT_ROOM') {
-      if (!socket.isAdmin) return;
       const history = db.messages.filter(m => m.toUserId === 'ADMIN_REPORT_ROOM');
       return socket.emit('chat_history', { partnerId: 'ADMIN_REPORT_ROOM', messages: history });
     }
@@ -177,7 +174,7 @@ io.on('connection', (socket) => {
     if (!sender || !toUserId) return;
 
     if (!socket.isAdmin || !impersonateUserId) {
-      sender.coins = (sender.coins || 0) + 5; // 送信ボーナス
+      sender.coins = (sender.coins || 0) + 5;
       updateMissionProgress(sender, 'chat', 1);
     }
 
@@ -234,7 +231,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 0未満を防止したスタンプ登録
   socket.on('create_stamp', ({ name, imageUrl, price }) => {
     const u = db.users[socket.userId];
     if (!u) return;
@@ -279,7 +275,6 @@ io.on('connection', (socket) => {
     socket.emit('system_alert', `🎉 スタンプ「${stamp.name}」を購入しました！`);
   });
 
-  // 無尽蔵ミッション受け取り & 次ミッションの自動補給
   socket.on('claim_mission', (missionId) => {
     const u = db.users[socket.userId];
     if (!u || !u.missions) return;
@@ -292,11 +287,9 @@ io.on('connection', (socket) => {
       return socket.emit('error_message', 'まだミッション条件を達成していません！');
     }
 
-    // 報酬獲得
     u.coins += m.reward;
     const claimedReward = m.reward;
 
-    // 次の難易度の無尽蔵ミッション生成
     const nextGoal = m.goal + (m.type === 'chat' ? 5 : 1);
     const nextReward = m.reward + (m.type === 'chat' ? 50 : 100);
 
@@ -305,7 +298,7 @@ io.on('connection', (socket) => {
       type: m.type,
       title: m.title,
       goal: nextGoal,
-      current: m.current, // 現在値を維持してカウント継続
+      current: m.current,
       reward: nextReward
     };
 
@@ -314,7 +307,6 @@ io.on('connection', (socket) => {
     socket.emit('system_alert', `🎁 ミッション達成！ ${claimedReward} コインを獲得！次のミッションが解放されました！`);
   });
 
-  // 👑 管理者機能
   socket.on('admin_auth', ({ code }) => {
     if (code === ADMIN_CODE) {
       socket.isAdmin = true;
@@ -329,7 +321,6 @@ io.on('connection', (socket) => {
     socket.emit('admin_logout_result');
   });
 
-  // 👑 コイン数を指定変更する機能
   socket.on('admin_set_coins', ({ targetUserId, amount }) => {
     if (!socket.isAdmin) return;
     const target = db.users[targetUserId];
@@ -344,16 +335,6 @@ io.on('connection', (socket) => {
   socket.on('admin_broadcast_alert', ({ message }) => {
     if (!socket.isAdmin) return;
     io.emit('receive_broadcast_alert', { title: `📢 管理者アナウンス`, message });
-  });
-
-  socket.on('admin_rename_user', ({ targetUserId, newName }) => {
-    if (!socket.isAdmin) return;
-    const safeName = sanitizeName(newName);
-    if (db.users[targetUserId] && safeName) {
-      db.users[targetUserId].name = safeName;
-      saveData();
-      broadcastUserList();
-    }
   });
 
   socket.on('admin_ban_user', ({ targetUserId, minutes }) => {
