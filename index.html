@@ -18,7 +18,6 @@
     .modal-box input, .modal-box textarea { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px; }
     .modal-box button { background: #06C755; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; }
 
-    /* 全画面緊急通知用モーダル */
     #alert-modal-overlay {
       display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(0,0,0,0.85); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; color: white;
@@ -205,7 +204,6 @@
     let alertInterval = null;
     let originalTitle = document.title;
 
-    // タブアイコン用SVGデータ
     const defaultIcon = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306C755'><path d='M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/></svg>";
     const alertIcon = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ff4757'><path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z'/></svg>";
 
@@ -215,7 +213,6 @@
     }
 
     window.onload = () => {
-      // 通知許可を要求
       if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
         Notification.requestPermission();
       }
@@ -227,7 +224,6 @@
       }
     };
 
-    // タブに戻ってきたら点滅通知を解除
     window.onfocus = () => {
       if (alertInterval && document.getElementById('alert-modal-overlay').style.display !== 'flex') {
         clearInterval(alertInterval);
@@ -248,7 +244,6 @@
     function initUser(name) {
       document.getElementById('my-name-display').innerText = `自分: ${name}`;
       
-      // ブラウザ側保存データからフレンドを自動復元・送る
       const savedFriends = JSON.parse(localStorage.getItem('chat_friends_' + myUserId) || '[]');
       const savedRequests = JSON.parse(localStorage.getItem('chat_requests_' + myUserId) || '[]');
       
@@ -310,7 +305,6 @@
     socket.on('user_list_update', (data) => {
       cachedData = data;
       
-      // フレンド状態をローカルストレージにバックアップ保存
       const me = data.users.find(u => u.userId === myUserId);
       if (me) {
         localStorage.setItem('chat_friends_' + myUserId, JSON.stringify(me.friends));
@@ -548,25 +542,23 @@
       reader.readAsDataURL(file);
     }
 
-    // 📩 メッセージ受信時の処理（開いてないチャットや別タブ時の新着通知対応）
+    // 📩 メッセージ受信時の処理（個人チャットの通知判定を確実化）
     socket.on('receive_message', (msg) => {
       const isCurrentPair = (watchedUserB === 'ADMIN_REPORT_ROOM' && msg.toUserId === 'ADMIN_REPORT_ROOM') ||
                           (msg.fromUserId === watchedUserA && msg.toUserId === watchedUserB) ||
                           (msg.fromUserId === watchedUserB && msg.toUserId === watchedUserA);
 
-      // 自分以外の送信 かつ （その人のチャット画面を開いてない OR ブラウザのタブが裏に隠れている）
+      // 他人からのメッセージで、別のチャットを開いているか、タブが非表示なら通知を起動
       if (msg.fromUserId !== myUserId && (!isCurrentPair || document.hidden)) {
         playBeepSound();
         
-        // デスクトップポップアップ通知
         if ("Notification" in window && Notification.permission === "granted") {
-          new Notification(`${msg.fromName} から新着メッセージ`, {
+          new Notification(`${msg.fromName} からメッセージ`, {
             body: msg.text || (msg.file ? 'ファイルを送信しました' : '新着メッセージ'),
             icon: defaultIcon
           });
         }
 
-        // タブアイコン・タイトルの点滅発動
         startTabNotification(`💬 ${msg.fromName}`);
       }
 
@@ -606,7 +598,6 @@
       link.href = url;
     }
 
-    // タブ点滅アニメーション共通処理
     function startTabNotification(text) {
       if (alertInterval) clearInterval(alertInterval);
       let toggle = false;
@@ -617,7 +608,6 @@
       }, 600);
     }
 
-    // 📢 受信時の一斉アナウンス処理（全画面表示・音・タブ文字/アイコン点滅・ポップアップ通知）
     socket.on('receive_broadcast_alert', ({ title, message, playSound }) => {
       document.getElementById('alert-title').innerText = title;
       document.getElementById('alert-body').innerText = message;
