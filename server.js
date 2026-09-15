@@ -39,13 +39,32 @@ const onlineSockets = {}; // userId -> socketId
 
 io.on('connection', (socket) => {
 
-  // 1. ユーザー初期化
-  socket.on('register', ({ userId, name }) => {
+  // 1. ユーザー初期化（クライアント側バックアップからの自動復元機能付き）
+  socket.on('register', ({ userId, name, savedFriends, savedRequests }) => {
     socket.userId = userId;
     onlineSockets[userId] = socket.id;
 
     if (!db.users[userId]) {
-      db.users[userId] = { userId, name, friends: [], requestsSent: [], bannedUntil: 0 };
+      db.users[userId] = {
+        userId,
+        name,
+        friends: Array.isArray(savedFriends) ? savedFriends : [],
+        requestsSent: Array.isArray(savedRequests) ? savedRequests : [],
+        bannedUntil: 0
+      };
+    } else {
+      // サーバー再起動（15分スリープ）対策：ローカル記憶からフレンドを自動復元・統合
+      if (Array.isArray(savedFriends)) {
+        savedFriends.forEach(fId => {
+          if (!db.users[userId].friends.includes(fId)) db.users[userId].friends.push(fId);
+        });
+      }
+      if (Array.isArray(savedRequests)) {
+        savedRequests.forEach(rId => {
+          if (!db.users[userId].requestsSent.includes(rId)) db.users[userId].requestsSent.push(rId);
+        });
+      }
+      db.users[userId].name = name;
     }
     saveData();
     broadcastUserList();
@@ -85,7 +104,6 @@ io.on('connection', (socket) => {
 
   // 4. チャット履歴の取得
   socket.on('get_chat_history', ({ partnerId, userA, userB }) => {
-    // 報告用チャットの場合
     if (partnerId === 'ADMIN_REPORT_ROOM') {
       if (!socket.isAdmin) return;
       const history = db.messages.filter(m => m.toUserId === 'ADMIN_REPORT_ROOM');
@@ -136,7 +154,6 @@ io.on('connection', (socket) => {
     db.messages.push(msg);
     saveData();
 
-    // 報告用チャットの場合
     if (toUserId === 'ADMIN_REPORT_ROOM') {
       return io.emit('receive_message', msg);
     }
@@ -177,7 +194,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 👑 管理者機能：一斉アナウンス配信（音ON/OFF対応）
+  // 👑 管理者機能：一斉アナウンス配信
   socket.on('admin_broadcast_alert', ({ message, playSound }) => {
     if (!socket.isAdmin) return;
 
