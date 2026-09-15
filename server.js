@@ -13,7 +13,7 @@ const io = new Server(server, {
 
 app.use(express.static(__dirname));
 
-const ADMIN_CODE = "hamsteromu";
+const ADMIN_CODE = "adminiwamoto";
 const DATA_FILE = path.join(__dirname, 'chat_data.json');
 
 // バグらないインラインSVGスタンプデータ
