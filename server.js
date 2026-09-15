@@ -13,7 +13,7 @@ const io = new Server(server, {
 
 app.use(express.static(__dirname));
 
-const ADMIN_CODE = "hamsteromu";
+const ADMIN_CODE = "adminhamu";
 const DATA_FILE = path.join(__dirname, 'chat_data.json');
 
 const STAMP_HIYOKO = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='55' r='35' fill='%23FFD700'/><circle cx='35' cy='45' r='5' fill='%23000'/><circle cx='65' cy='45' r='5' fill='%23000'/><polygon points='50,50 38,62 62,62' fill='%23FF6B6B'/></svg>";
