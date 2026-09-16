@@ -11,7 +11,7 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
-const ADMIN_PASSWORD = "admin"; // 👑 管理者パスワード
+const ADMIN_PASSWORD = "adminadminadmin3"; // 👑 管理者パスワード
 const DATA_FILE = path.join(__dirname, 'data.json');
 
 // --- データベース（メモリ ＆ ファイル保存） ---
