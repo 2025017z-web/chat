@@ -7,27 +7,36 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  maxHttpBufferSize: 1e7 // 10MBまでの画像・ファイル送信に対応
+  maxHttpBufferSize: 1e7 // 10MB対応
 });
 
 const PORT = process.env.PORT || 3000;
-const ADMIN_PASSWORD = "adminhamu"; // 👑 管理者パスワード
+const ADMIN_PASSWORD = "admin"; // 👑 管理者パスワード
 const DATA_FILE = path.join(__dirname, 'data.json');
 
 // --- データベース（メモリ ＆ ファイル保存） ---
 let db = {
   users: {},    // ユーザー情報
   messages: [], // チャット履歴
-  stamps: []    // スタンプ情報
+  stamps: [],   // スタンプ情報
+  groups: []    // グループ情報
 };
 
-// 起動時にファイルからデータを復元
+// 初期スタンプ作成用の補助関数（SVGエンコード）
+function makeSvgDataUrl(emoji) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">${emoji}</text></svg>`;
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+
+// 起動時にデータ復元
 function loadData() {
   if (fs.existsSync(DATA_FILE)) {
     try {
       const dataStr = fs.readFileSync(DATA_FILE, 'utf8');
       db = JSON.parse(dataStr);
-      // 再起動時は全ユーザーのオンライン状態をオフラインにリセット
+      if (!db.groups) db.groups = [];
+      
+      // オンライン状態のリセット
       Object.keys(db.users).forEach(id => {
         db.users[id].isOnline = false;
         db.users[id].socketId = null;
@@ -39,16 +48,17 @@ function loadData() {
   } else {
     // 初期データの作成
     db.stamps = [
-      { id: 'stamp_default_1', name: 'いいね！', imageUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">👍</text></svg>', price: 0 },
-      { id: 'stamp_default_2', name: 'OK', imageUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🙆</text></svg>', price: 0 },
-      { id: 'stamp_default_3', name: 'ありがとう', imageUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🙏</text></svg>', price: 0 }
+      { id: 'stamp_default_1', name: 'いいね！', imageUrl: makeSvgDataUrl('👍'), price: 0 },
+      { id: 'stamp_default_2', name: 'OK', imageUrl: makeSvgDataUrl('🙆'), price: 0 },
+      { id: 'stamp_default_3', name: 'ありがとう', imageUrl: makeSvgDataUrl('🙏'), price: 0 }
     ];
+    db.groups = [];
     saveData();
     console.log('🆕 新しい data.json を作成しました');
   }
 }
 
-// 変更時にファイルへ書き込み
+// 変更時に書き込み
 function saveData() {
   try {
     const copyUsers = {};
@@ -62,7 +72,8 @@ function saveData() {
     const saveDataObj = {
       users: copyUsers,
       messages: db.messages,
-      stamps: db.stamps
+      stamps: db.stamps,
+      groups: db.groups || []
     };
 
     fs.writeFileSync(DATA_FILE, JSON.stringify(saveDataObj, null, 2), 'utf8');
@@ -73,7 +84,7 @@ function saveData() {
 
 loadData();
 
-// 静的ファイルの提供設定（ルートおよびpublicフォルダの両方に対応）
+// 静的ファイルの提供設定
 app.use(express.static(__dirname));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -83,11 +94,10 @@ app.get('/', (req, res) => {
   } else if (fs.existsSync(path.join(__dirname, 'public', 'index.html'))) {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
   } else {
-    res.status(404).send('index.html が見つかりません。server.js と同じフォルダに index.html を配置してください。');
+    res.status(404).send('index.html が見つかりません。');
   }
 });
 
-// デフォルトのミッション設定
 function getDefaultMissions() {
   return [
     { id: 'm1', title: 'メッセージを5回送信', current: 0, goal: 5, reward: 50 },
@@ -96,7 +106,7 @@ function getDefaultMissions() {
   ];
 }
 
-// ユーザー情報一括配信
+// ユーザー＆グループ情報配信
 function broadcastUserList() {
   const usersArray = Object.values(db.users).map(u => ({
     userId: u.userId,
@@ -113,7 +123,7 @@ function broadcastUserList() {
 
   const chatPairsMap = new Map();
   db.messages.forEach(m => {
-    if (m.toUserId === 'ADMIN_REPORT_ROOM') return;
+    if (m.toUserId === 'ADMIN_REPORT_ROOM' || m.toGroupId) return;
     const pairKey = [m.fromUserId, m.toUserId].sort().join('_');
     if (!chatPairsMap.has(pairKey)) {
       const u1 = db.users[m.fromUserId];
@@ -129,15 +139,15 @@ function broadcastUserList() {
 
   io.emit('user_list_update', {
     users: usersArray,
+    groups: db.groups || [],
     chatPairs: Array.from(chatPairsMap.values())
   });
 }
 
-// ソケット通信設定
+// ソケット通信
 io.on('connection', (socket) => {
   let currentUserId = null;
 
-  // 1. ユーザーログイン・登録
   socket.on('register', ({ userId, name, savedFriends, savedRequests }) => {
     currentUserId = userId;
     
@@ -168,7 +178,6 @@ io.on('connection', (socket) => {
     broadcastUserList();
   });
 
-  // 2. プロフィール変更
   socket.on('update_profile', ({ name, avatar, bgImage }) => {
     if (!currentUserId || !db.users[currentUserId]) return;
     if (name) db.users[currentUserId].name = name;
@@ -180,14 +189,12 @@ io.on('connection', (socket) => {
     broadcastUserList();
   });
 
-  // 3. 友達申請
   socket.on('send_friend_request', (targetUserId) => {
     if (!currentUserId || !db.users[currentUserId] || !db.users[targetUserId]) return;
 
     if (!db.users[currentUserId].requestsSent.includes(targetUserId)) {
       db.users[currentUserId].requestsSent.push(targetUserId);
     }
-
     if (!db.users[currentUserId].friends.includes(targetUserId)) {
       db.users[currentUserId].friends.push(targetUserId);
     }
@@ -199,10 +206,12 @@ io.on('connection', (socket) => {
     broadcastUserList();
   });
 
-  // 4. チャット履歴の取得
-  socket.on('get_chat_history', ({ partnerId, userA, userB }) => {
+  // チャット履歴取得
+  socket.on('get_chat_history', ({ partnerId, groupId, userA, userB }) => {
     let history = [];
-    if (partnerId === 'ADMIN_REPORT_ROOM') {
+    if (groupId) {
+      history = db.messages.filter(m => m.toGroupId === groupId);
+    } else if (partnerId === 'ADMIN_REPORT_ROOM') {
       history = db.messages.filter(m => m.toUserId === 'ADMIN_REPORT_ROOM' || m.fromUserId === currentUserId);
     } else if (userA && userB) {
       history = db.messages.filter(m => 
@@ -210,16 +219,17 @@ io.on('connection', (socket) => {
       );
     } else if (partnerId) {
       history = db.messages.filter(m => 
-        (m.fromUserId === currentUserId && m.toUserId === partnerId) || 
-        (m.fromUserId === partnerId && m.toUserId === currentUserId)
+        !m.toGroupId &&
+        ((m.fromUserId === currentUserId && m.toUserId === partnerId) || 
+         (m.fromUserId === partnerId && m.toUserId === currentUserId))
       );
     }
 
-    socket.emit('chat_history', { partnerId: partnerId || userB, messages: history });
+    socket.emit('chat_history', { partnerId: partnerId || userB, groupId, messages: history });
   });
 
-  // 5. メッセージ送信
-  socket.on('send_message', ({ toUserId, text, file, stampUrl, impersonateUserId }) => {
+  // メッセージ送信
+  socket.on('send_message', ({ toUserId, toGroupId, text, file, stampUrl, impersonateUserId }) => {
     if (!currentUserId || !db.users[currentUserId]) return;
 
     const senderId = impersonateUserId || currentUserId;
@@ -233,7 +243,8 @@ io.on('connection', (socket) => {
       fromUserId: senderId,
       fromName: sender.name,
       fromAvatar: sender.avatar,
-      toUserId: toUserId,
+      toUserId: toGroupId ? null : toUserId,
+      toGroupId: toGroupId || null,
       text: text || '',
       file: file || null,
       stampUrl: stampUrl || null,
@@ -244,9 +255,9 @@ io.on('connection', (socket) => {
 
     db.messages.push(msgObj);
 
+    // コイン加算 (+5)
     if (db.users[senderId]) {
       db.users[senderId].coins = (db.users[senderId].coins || 0) + 5;
-      
       if (db.users[senderId].missions) {
         db.users[senderId].missions.forEach(m => {
           if (m.id === 'm1' || m.id === 'm2') m.current += 1;
@@ -255,12 +266,10 @@ io.on('connection', (socket) => {
     }
 
     saveData();
-
     io.emit('receive_message', msgObj);
     broadcastUserList();
   });
 
-  // 6. 既読処理
   socket.on('mark_as_read', ({ partnerId, watchedUserA }) => {
     const targetA = watchedUserA || currentUserId;
     let updated = false;
@@ -284,7 +293,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 7. スタンプ自作
+  // スタンプ自作
   socket.on('create_stamp', ({ name, imageUrl, price }) => {
     if (!currentUserId) return;
     const newStamp = {
@@ -309,7 +318,7 @@ io.on('connection', (socket) => {
     broadcastUserList();
   });
 
-  // 8. スタンプ購入
+  // スタンプ購入 (★ 手数料10% / クリエイターへ90%還元)
   socket.on('buy_stamp', (stampId) => {
     const stamp = db.stamps.find(s => s.id === stampId);
     const user = db.users[currentUserId];
@@ -323,8 +332,10 @@ io.on('connection', (socket) => {
     if (!user.ownedStamps) user.ownedStamps = [];
     user.ownedStamps.push(stampId);
 
+    // 販売者に 90% 還元（10%が手数料）
     if (stamp.creatorId && db.users[stamp.creatorId]) {
-      db.users[stamp.creatorId].coins = (db.users[stamp.creatorId].coins || 0) + Math.floor(stamp.price * 0.8);
+      const reward = Math.floor(stamp.price * 0.9);
+      db.users[stamp.creatorId].coins = (db.users[stamp.creatorId].coins || 0) + reward;
     }
 
     if (user.missions) {
@@ -337,7 +348,6 @@ io.on('connection', (socket) => {
     socket.emit('update_stamps_list', db.stamps);
   });
 
-  // 9. ミッション達成
   socket.on('claim_mission', (missionId) => {
     const user = db.users[currentUserId];
     if (!user || !user.missions) return;
@@ -365,6 +375,22 @@ io.on('connection', (socket) => {
     socket.emit('admin_logout_result');
   });
 
+  // 管理者によるグループ作成
+  socket.on('admin_create_group', ({ groupName, memberUserIds }) => {
+    if (!groupName) return;
+    const newGroup = {
+      id: 'group_' + Date.now(),
+      name: groupName,
+      members: memberUserIds || [] // 空なら全員参加
+    };
+    if (!db.groups) db.groups = [];
+    db.groups.push(newGroup);
+
+    saveData();
+    broadcastUserList();
+    socket.emit('system_alert', `👨‍👩‍👧‍👦 グループ「${groupName}」を作成しました`);
+  });
+
   socket.on('admin_set_coins', ({ targetUserId, amount }) => {
     if (db.users[targetUserId]) {
       db.users[targetUserId].coins = parseInt(amount) || 0;
@@ -387,7 +413,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // 切断
   socket.on('disconnect', () => {
     if (currentUserId && db.users[currentUserId]) {
       db.users[currentUserId].isOnline = false;
