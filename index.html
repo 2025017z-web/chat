@@ -123,6 +123,7 @@
   <div id="create-stamp-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
       <h3>🎨 スタンプ自作＆販売</h3>
+      <p style="font-size: 11px; color: #888; margin-bottom: 5px;">※販売手数料は10%です（売上の90%を獲得できます）</p>
       <input type="text" id="stamp-name-input" placeholder="スタンプ名">
       <input type="number" id="stamp-price-input" placeholder="価格 (コイン)" value="50" min="0">
       <div style="text-align: left; font-size: 12px; margin-top: 5px;">スタンプ画像:</div>
@@ -130,6 +131,20 @@
       <div style="display: flex; gap: 8px; margin-top: 10px;">
         <button onclick="closeStampModal()" style="background: #ccc; color: #333;">キャンセル</button>
         <button onclick="submitNewStamp()">出品・登録</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="create-group-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-box">
+      <h3>👨‍👩‍👧‍👦 グループチャット作成</h3>
+      <input type="text" id="group-name-input" placeholder="グループ名">
+      <div style="text-align: left; font-size: 12px; margin-top: 10px;">参加ユーザー選択（複数選択可）:</div>
+      <div id="group-user-checkboxes" style="text-align: left; max-height: 150px; overflow-y: auto; border: 1px solid #ccc; padding: 5px; margin: 5px 0;"></div>
+      <div style="font-size: 11px; color: #888;">※未選択の場合は全員参加となります</div>
+      <div style="display: flex; gap: 8px; margin-top: 10px;">
+        <button onclick="closeGroupModal()" style="background: #ccc; color: #333;">キャンセル</button>
+        <button onclick="submitCreateGroup()">作成する</button>
       </div>
     </div>
   </div>
@@ -162,6 +177,8 @@
           <div><button onclick="openProfileModal()" style="background: none; border: none; color: #4a90e2; font-size: 11px; cursor: pointer; margin-top: 4px;">プロフィール・背景設定</button></div>
         </div>
       </div>
+      <div class="section-title">グループ</div>
+      <div class="item-list" id="home-groups-list"></div>
       <div class="section-title">友達リスト</div>
       <div class="item-list" id="home-friends-list"></div>
       <div class="section-title">知り合いかも</div>
@@ -200,10 +217,11 @@
 
         <div id="admin-active-box" style="display: none;">
           <div style="color: #27ae60; font-weight: bold; font-size: 12px; margin-bottom: 12px;">🔓 管理者権限認証済み</div>
+          <button onclick="openGroupModal()" style="width: 100%; background: #2980b9; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 8px;">👨‍👩‍👧‍👦 グループチャット作成</button>
           <button onclick="openReportChat()" style="width: 100%; background: #8e44ad; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 8px;">📢 通報・報告ルーム</button>
           <button onclick="openBroadcastPrompt()" style="width: 100%; background: #ff4757; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 15px;">⚡ 全員に一斉アナウンス</button>
 
-          <div class="section-title" style="margin: 0 -15px 5px -15px;">🕵️ 全会話の監視</div>
+          <div class="section-title" style="margin: 0 -15px 5px -15px;">🕵️ 全会話の監視・なりすまし</div>
           <div class="item-list" id="admin-chat-pairs" style="max-height: 150px; margin: 0 -15px 15px -15px;"></div>
 
           <div class="section-title" style="margin: 0 -15px 5px -15px;">ユーザー管理 & コイン変更</div>
@@ -244,9 +262,10 @@
     let myUserId = localStorage.getItem('chat_userid');
     let watchedUserA = null;
     let watchedUserB = null;
+    let currentGroupId = null; // グループトーク用
     let selectedSenderId = null;
     let isAdmin = false;
-    let cachedData = { users: [], chatPairs: [], messages: [] };
+    let cachedData = { users: [], groups: [], chatPairs: [], messages: [] };
     let allStamps = [];
     let audioContextUnlocked = false;
 
@@ -399,14 +418,41 @@
 
     function updateUI() {
       const me = cachedData.users.find(u => u.userId === myUserId);
+      const groupsList = document.getElementById('home-groups-list');
       const friendsList = document.getElementById('home-friends-list');
       const othersList = document.getElementById('home-others-list');
       const chatThreadsList = document.getElementById('chat-threads-list');
 
+      groupsList.innerHTML = '';
       friendsList.innerHTML = '';
       othersList.innerHTML = '';
       chatThreadsList.innerHTML = '';
 
+      // グループ一覧のレンダリング
+      if (cachedData.groups) {
+        cachedData.groups.forEach(group => {
+          // メンバー指定がある場合は自分が参加している場合のみ表示
+          if (group.members && group.members.length > 0 && !group.members.includes(myUserId) && !isAdmin) return;
+
+          const gItem = document.createElement('div');
+          gItem.className = 'list-item';
+          gItem.innerHTML = `
+            <div class="avatar" style="background:#2980b9;">👨‍👩‍👧‍👦</div>
+            <div class="item-body">
+              <div class="item-title">${group.name}</div>
+              <div class="item-sub">グループチャット</div>
+            </div>
+          `;
+          gItem.onclick = () => selectGroup(group.id, group.name);
+          groupsList.appendChild(gItem);
+
+          const threadGItem = gItem.cloneNode(true);
+          threadGItem.onclick = () => selectGroup(group.id, group.name);
+          chatThreadsList.appendChild(threadGItem);
+        });
+      }
+
+      // ユーザー一覧のレンダリング
       cachedData.users.forEach(user => {
         if (user.userId === myUserId) return;
         const isFriend = me && me.friends.includes(user.userId);
@@ -494,7 +540,38 @@
       renderStampPicker();
     }
 
+    function openGroupModal() {
+      const container = document.getElementById('group-user-checkboxes');
+      container.innerHTML = '';
+      cachedData.users.forEach(u => {
+        if (u.userId === myUserId) return;
+        const label = document.createElement('label');
+        label.style.display = 'block';
+        label.style.fontSize = '12px';
+        label.style.marginBottom = '3px';
+        label.innerHTML = `<input type="checkbox" value="${u.userId}" class="group-user-chk"> ${u.name}`;
+        container.appendChild(label);
+      });
+      document.getElementById('create-group-modal').style.display = 'flex';
+    }
+
+    function closeGroupModal() {
+      document.getElementById('create-group-modal').style.display = 'none';
+    }
+
+    function submitCreateGroup() {
+      const name = document.getElementById('group-name-input').value.trim();
+      if (!name) return alert('グループ名を入力してください');
+
+      const checked = Array.from(document.querySelectorAll('.group-user-chk:checked')).map(c => c.value);
+      if (checked.length > 0) checked.push(myUserId); // 自分も含める
+
+      socket.emit('admin_create_group', { groupName: name, memberUserIds: checked });
+      closeGroupModal();
+    }
+
     function inspectPair(userAId, userBId, nameA, nameB) {
+      currentGroupId = null;
       watchedUserA = userAId;
       watchedUserB = userBId;
       selectedSenderId = userAId;
@@ -543,6 +620,7 @@
     }
 
     function selectPartner(partnerId, partnerName) {
+      currentGroupId = null;
       watchedUserA = myUserId;
       watchedUserB = partnerId;
       selectedSenderId = myUserId;
@@ -554,7 +632,21 @@
       socket.emit('get_chat_history', { partnerId });
     }
 
+    function selectGroup(groupId, groupName) {
+      currentGroupId = groupId;
+      watchedUserA = myUserId;
+      watchedUserB = null;
+      selectedSenderId = myUserId;
+
+      document.getElementById('chat-header-text').innerText = `👨‍👩‍👧‍👦 ${groupName}`;
+      document.getElementById('impersonate-bar').style.display = 'none';
+      document.getElementById('message-area').innerHTML = '';
+
+      socket.emit('get_chat_history', { groupId });
+    }
+
     function openReportChat() {
+      currentGroupId = null;
       watchedUserA = myUserId;
       watchedUserB = 'ADMIN_REPORT_ROOM';
       selectedSenderId = myUserId;
@@ -566,13 +658,13 @@
       socket.emit('get_chat_history', { partnerId: 'ADMIN_REPORT_ROOM' });
     }
 
-    socket.on('chat_history', ({ partnerId, messages }) => {
+    socket.on('chat_history', ({ partnerId, groupId, messages }) => {
       const messageArea = document.getElementById('message-area');
       messageArea.innerHTML = '';
       messages.forEach(msg => renderMessage(msg));
       messageArea.scrollTop = messageArea.scrollHeight;
 
-      if (partnerId !== 'ADMIN_REPORT_ROOM') {
+      if (partnerId && partnerId !== 'ADMIN_REPORT_ROOM') {
         socket.emit('mark_as_read', { partnerId: watchedUserB, watchedUserA });
       }
     });
@@ -580,42 +672,46 @@
     function sendText() {
       const input = document.getElementById('text-input');
       const text = input.value;
-      if (!text || !watchedUserB) return;
+      if (!text || (!watchedUserB && !currentGroupId)) return;
 
-      const toUserId = (watchedUserB === 'ADMIN_REPORT_ROOM') ? 'ADMIN_REPORT_ROOM' : ((selectedSenderId === watchedUserA) ? watchedUserB : watchedUserA);
+      const toUserId = currentGroupId ? null : ((watchedUserB === 'ADMIN_REPORT_ROOM') ? 'ADMIN_REPORT_ROOM' : ((selectedSenderId === watchedUserA) ? watchedUserB : watchedUserA));
       const impersonateUserId = (isAdmin && selectedSenderId !== myUserId && watchedUserB !== 'ADMIN_REPORT_ROOM') ? selectedSenderId : null;
 
-      socket.emit('send_message', { toUserId, text, file: null, stampUrl: null, impersonateUserId });
+      socket.emit('send_message', { toUserId, toGroupId: currentGroupId, text, file: null, stampUrl: null, impersonateUserId });
       input.value = '';
     }
 
     function sendStamp(stampUrl) {
-      if (!watchedUserB) return alert('トーク相手を選択してください');
-      const toUserId = (watchedUserB === 'ADMIN_REPORT_ROOM') ? 'ADMIN_REPORT_ROOM' : ((selectedSenderId === watchedUserA) ? watchedUserB : watchedUserA);
+      if (!watchedUserB && !currentGroupId) return alert('トーク相手を選択してください');
+      const toUserId = currentGroupId ? null : ((watchedUserB === 'ADMIN_REPORT_ROOM') ? 'ADMIN_REPORT_ROOM' : ((selectedSenderId === watchedUserA) ? watchedUserB : watchedUserA));
       const impersonateUserId = (isAdmin && selectedSenderId !== myUserId && watchedUserB !== 'ADMIN_REPORT_ROOM') ? selectedSenderId : null;
 
-      socket.emit('send_message', { toUserId, text: '', file: null, stampUrl, impersonateUserId });
+      socket.emit('send_message', { toUserId, toGroupId: currentGroupId, text: '', file: null, stampUrl, impersonateUserId });
       document.getElementById('stamp-picker').style.display = 'none';
     }
 
     function sendFile() {
       const fileInput = document.getElementById('file-input');
       const file = fileInput.files[0];
-      if (!file || !watchedUserB) return;
+      if (!file || (!watchedUserB && !currentGroupId)) return;
 
-      const toUserId = (watchedUserB === 'ADMIN_REPORT_ROOM') ? 'ADMIN_REPORT_ROOM' : ((selectedSenderId === watchedUserA) ? watchedUserB : watchedUserA);
+      const toUserId = currentGroupId ? null : ((watchedUserB === 'ADMIN_REPORT_ROOM') ? 'ADMIN_REPORT_ROOM' : ((selectedSenderId === watchedUserA) ? watchedUserB : watchedUserA));
       const impersonateUserId = (isAdmin && selectedSenderId !== myUserId && watchedUserB !== 'ADMIN_REPORT_ROOM') ? selectedSenderId : null;
 
       const reader = new FileReader();
       reader.onload = function(e) {
-        socket.emit('send_message', { toUserId, text: '', file: { name: file.name, type: file.type, data: e.target.result }, stampUrl: null, impersonateUserId });
+        socket.emit('send_message', { toUserId, toGroupId: currentGroupId, text: '', file: { name: file.name, type: file.type, data: e.target.result }, stampUrl: null, impersonateUserId });
         fileInput.value = '';
       };
       reader.readAsDataURL(file);
     }
 
+    // ★ 通知バグ修正（自分宛て・参加グループ宛てのみ通知音＆ポップアップを発火）
     socket.on('receive_message', (msg) => {
-      if (msg.fromUserId !== myUserId) {
+      const isForMe = (msg.toUserId === myUserId) || 
+                      (msg.toGroupId && cachedData.groups.some(g => g.id === msg.toGroupId && (!g.members || g.members.length === 0 || g.members.includes(myUserId))));
+
+      if (msg.fromUserId !== myUserId && isForMe) {
         playNotificationSound();
         if ("Notification" in window && Notification.permission === "granted") {
           const n = new Notification(`💬 ${msg.fromName}`, {
@@ -629,9 +725,10 @@
         }
       }
 
-      const isCurrentPair = (watchedUserB === 'ADMIN_REPORT_ROOM' && msg.toUserId === 'ADMIN_REPORT_ROOM') ||
-                          (msg.fromUserId === watchedUserA && msg.toUserId === watchedUserB) ||
-                          (msg.fromUserId === watchedUserB && msg.toUserId === watchedUserA);
+      // チャット画面描画処理
+      const isCurrentPair = (currentGroupId && msg.toGroupId === currentGroupId) ||
+                            (watchedUserB === 'ADMIN_REPORT_ROOM' && msg.toUserId === 'ADMIN_REPORT_ROOM') ||
+                            (!currentGroupId && ((msg.fromUserId === watchedUserA && msg.toUserId === watchedUserB) || (msg.fromUserId === watchedUserB && msg.toUserId === watchedUserA)));
 
       if (!isCurrentPair) return;
       renderMessage(msg);
@@ -646,7 +743,7 @@
       const row = document.createElement('div');
       row.className = `msg-row ${isRightSide ? 'me' : 'other'}`;
 
-      if (!isRightSide || watchedUserB === 'ADMIN_REPORT_ROOM') {
+      if (!isRightSide || watchedUserB === 'ADMIN_REPORT_ROOM' || currentGroupId) {
         const sender = document.createElement('div');
         sender.className = 'msg-sender';
         sender.innerText = msg.fromName;
@@ -683,7 +780,7 @@
 
       const meta = document.createElement('div');
       meta.className = 'msg-meta';
-      if (isRightSide && msg.read && watchedUserB !== 'ADMIN_REPORT_ROOM') {
+      if (isRightSide && msg.read && watchedUserB !== 'ADMIN_REPORT_ROOM' && !currentGroupId) {
         const readSpan = document.createElement('span');
         readSpan.innerText = '既読';
         meta.appendChild(readSpan);
