@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>chat</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
+  <title>LINE Extended</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306C755'><path d='M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/></svg>">
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
     body { display: flex; height: 100vh; background-color: #f5f5f5; overflow: hidden; }
 
+    /* モーダル */
     .modal-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000;
@@ -24,16 +25,19 @@
     }
     .alert-card { background: #222; border: 3px solid #ff4757; border-radius: 15px; padding: 30px; width: 85%; max-width: 500px; text-align: center; }
 
+    /* LINE風ナビバー */
     #navbar { width: 60px; background: #2c3440; display: flex; flex-direction: column; align-items: center; padding-top: 20px; gap: 20px; z-index: 10; }
-    .nav-item { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #8a99ad; cursor: pointer; font-size: 20px; transition: 0.2s; }
+    .nav-item { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #8a99ad; cursor: pointer; font-size: 20px; transition: 0.2s; position: relative; }
     .nav-item:hover, .nav-item.active { color: white; background: #3d4756; }
 
-    #sidebar { width: 320px; background: #ffffff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
-    .tab-content { display: none; flex-direction: column; height: 100%; overflow-y: auto; }
+    /* サイドバー */
+    #sidebar { width: 310px; background: #ffffff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
+    .tab-content { display: none; flex-direction: column; height: 100%; }
     .tab-content.active { display: flex; }
 
     .sidebar-header { padding: 15px; font-size: 18px; font-weight: bold; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fbfbfb; }
 
+    /* プロフィール＆コイン表示 */
     .profile-card { padding: 15px; background: #f8f9fa; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 12px; }
     .profile-avatar { width: 48px; height: 48px; border-radius: 50%; background: #06C755; color: white; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; flex-shrink: 0; background-size: cover; background-position: center; }
     .profile-info { flex: 1; overflow: hidden; }
@@ -54,14 +58,16 @@
 
     .btn-sm { padding: 4px 10px; border-radius: 12px; border: none; font-size: 11px; cursor: pointer; font-weight: bold; }
     .btn-add { background: #06C755; color: white; }
-    .btn-disabled { background: #e0e0e0; color: #999; cursor: not-allowed; }
+    .btn-pending { background: #e0e0e0; color: #888; cursor: default; }
 
+    /* スタンプショップグリッド */
     .stamp-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 10px; }
     .stamp-card { border: 1px solid #eee; border-radius: 8px; padding: 10px; text-align: center; background: #fff; }
     .stamp-card img { width: 60px; height: 60px; object-fit: contain; margin-bottom: 5px; }
 
+    /* メインチャット画面 */
     #chat-container { flex: 1; display: flex; flex-direction: column; background-color: #7293c2; background-size: cover; background-position: center; }
-    .chat-header { background: #ffffff; color: #333; padding: 12px 15px; font-weight: bold; border-bottom: 1px solid #e0e0e0; display: flex; flex-direction: column; gap: 6px; }
+    .chat-header { background: #ffffff; color: #333; padding: 12px 15px; font-weight: bold; border-bottom: 1px solid #e0e0e0; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 
     .impersonate-bar { display: none; background: #1a1e29; color: white; padding: 6px 10px; border-radius: 6px; align-items: center; gap: 10px; font-size: 12px; }
     .imp-user-btn { background: #444; color: white; border: 1px solid #666; padding: 3px 8px; border-radius: 10px; cursor: pointer; font-size: 11px; }
@@ -75,9 +81,13 @@
     .msg-sender { font-size: 11px; color: #ffffff; margin-bottom: 3px; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
 
     .msg-body { display: flex; align-items: flex-end; gap: 5px; }
-    .msg-meta { font-size: 10px; color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.4); display: flex; flex-direction: column; align-items: flex-end; }
+    .me .msg-body { flex-direction: row; }
+    .other .msg-body { flex-direction: row-reverse; }
 
-    .msg-bubble { padding: 9px 13px; border-radius: 15px; font-size: 14px; word-break: break-all; white-space: pre-wrap; line-height: 1.4; }
+    .msg-meta { font-size: 10px; color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.4); display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; }
+    .read-status { font-weight: bold; }
+
+    .msg-bubble { padding: 9px 13px; border-radius: 15px; font-size: 14px; word-break: break-all; white-space: pre-wrap; line-height: 1.4; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
     .me .msg-bubble { background: #85e249; color: #000; border-top-right-radius: 2px; }
     .other .msg-bubble { background: #ffffff; color: #000; border-top-left-radius: 2px; }
 
@@ -86,16 +96,19 @@
 
     .input-area { background: #ffffff; padding: 10px 15px; display: flex; gap: 8px; align-items: center; border-top: 1px solid #eee; position: relative; }
     .input-area textarea { flex: 1; height: 38px; border: 1px solid #e0e0e0; border-radius: 18px; padding: 9px 15px; resize: none; outline: none; font-size: 14px; background: #f8f9fa; }
-    .action-icon { font-size: 22px; cursor: pointer; color: #666; }
+    .action-icon { font-size: 22px; cursor: pointer; color: #666; user-select: none; }
     .action-icon input { display: none; }
     .send-btn { background: #06C755; color: white; border: none; padding: 8px 16px; border-radius: 18px; cursor: pointer; font-weight: bold; font-size: 13px; }
 
-    #stamp-picker { display: none; position: absolute; bottom: 60px; left: 10px; background: white; border: 1px solid #ccc; border-radius: 10px; padding: 10px; width: 280px; max-height: 200px; overflow-y: auto; grid-template-columns: repeat(3, 1fr); gap: 10px; z-index: 100; }
-    #stamp-picker img { width: 100%; height: 70px; object-fit: contain; cursor: pointer; border-radius: 6px; }
+    /* スタンプ選択ポップアップ */
+    #stamp-picker { display: none; position: absolute; bottom: 60px; left: 10px; background: white; border: 1px solid #ccc; border-radius: 10px; padding: 10px; width: 280px; max-height: 200px; overflow-y: auto; grid-template-columns: repeat(3, 1fr); gap: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; }
+    #stamp-picker img { width: 100%; height: 70px; object-fit: contain; cursor: pointer; border-radius: 6px; padding: 4px; }
+    #stamp-picker img:hover { background: #f0f0f0; }
   </style>
 </head>
-<body onclick="enableAudioAndNotification()">
+<body>
 
+  <!-- 名前登録モーダル -->
   <div id="modal-overlay" class="modal-overlay">
     <div class="modal-box">
       <h3>名前を入力（最大20文字）</h3>
@@ -104,12 +117,13 @@
     </div>
   </div>
 
+  <!-- プロフィール・背景変更モーダル -->
   <div id="profile-modal-overlay" class="modal-overlay" style="display: none;">
     <div class="modal-box">
       <h3>🎨 プロフィール＆背景設定</h3>
       <div style="text-align: left; font-size: 12px; margin-top: 10px;">名前:</div>
       <input type="text" id="edit-name-input" maxlength="20">
-      <div style="text-align: left; font-size: 12px; margin-top: 5px;">アイコン画像:</div>
+      <div style="text-align: left; font-size: 12px; margin-top: 5px;">アイコン画像 (画像を選択):</div>
       <input type="file" id="edit-avatar-file" accept="image/*">
       <div style="text-align: left; font-size: 12px; margin-top: 5px;">トーク画面背景画像:</div>
       <input type="file" id="edit-bg-file" accept="image/*">
@@ -120,12 +134,12 @@
     </div>
   </div>
 
+  <!-- スタンプ作成モーダル -->
   <div id="create-stamp-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
       <h3>🎨 スタンプ自作＆販売</h3>
-      <p style="font-size: 11px; color: #888; margin-bottom: 5px;">※販売手数料は10%です（売上の90%を獲得できます）</p>
       <input type="text" id="stamp-name-input" placeholder="スタンプ名">
-      <input type="number" id="stamp-price-input" placeholder="価格 (コイン)" value="50" min="0">
+      <input type="number" id="stamp-price-input" placeholder="価格 (コイン)" value="50">
       <div style="text-align: left; font-size: 12px; margin-top: 5px;">スタンプ画像:</div>
       <input type="file" id="stamp-image-file" accept="image/*">
       <div style="display: flex; gap: 8px; margin-top: 10px;">
@@ -135,38 +149,28 @@
     </div>
   </div>
 
-  <div id="create-group-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-box">
-      <h3>👨‍👩‍👧‍👦 グループチャット作成</h3>
-      <input type="text" id="group-name-input" placeholder="グループ名">
-      <div style="text-align: left; font-size: 12px; margin-top: 10px;">参加ユーザー選択（複数選択可）:</div>
-      <div id="group-user-checkboxes" style="text-align: left; max-height: 150px; overflow-y: auto; border: 1px solid #ccc; padding: 5px; margin: 5px 0;"></div>
-      <div style="font-size: 11px; color: #888;">※未選択の場合は全員参加となります</div>
-      <div style="display: flex; gap: 8px; margin-top: 10px;">
-        <button onclick="closeGroupModal()" style="background: #ccc; color: #333;">キャンセル</button>
-        <button onclick="submitCreateGroup()">作成する</button>
-      </div>
-    </div>
-  </div>
-
+  <!-- 緊急アナウンス表示用 -->
   <div id="alert-modal-overlay">
     <div class="alert-card">
       <h1 id="alert-title" style="color: #ff4757; font-size: 20px; margin-bottom: 10px;">📢 お知らせ</h1>
-      <p id="alert-body" style="font-size: 14px; margin-bottom: 20px; white-space: pre-wrap; font-weight: bold;"></p>
+      <p id="alert-body" style="font-size: 14px; line-height: 1.5; margin-bottom: 20px; white-space: pre-wrap; font-weight: bold;"></p>
       <button onclick="closeAlertModal()" style="background: #ff4757; color: white; border: none; padding: 10px 25px; border-radius: 6px; cursor: pointer; font-weight: bold;">確認</button>
     </div>
   </div>
 
+  <!-- 1. ナビゲーションバー -->
   <div id="navbar">
     <div class="nav-item active" title="ホーム" onclick="switchTab('tab-home', this)">🏠</div>
     <div class="nav-item" title="トーク" onclick="switchTab('tab-chats', this)">💬</div>
     <div class="nav-item" title="スタンプショップ" onclick="switchTab('tab-shop', this)">🎨</div>
     <div class="nav-item" title="ミッション" onclick="switchTab('tab-missions', this)">🎯</div>
-    <div class="nav-item" title="管理者パネル" onclick="switchTab('tab-admin', this)">👑</div>
+    <div class="nav-item" id="nav-admin-btn" title="管理者" style="display: none;" onclick="switchTab('tab-admin', this)">👑</div>
   </div>
 
+  <!-- 2. サイドバー -->
   <div id="sidebar">
 
+    <!-- TAB 1: ホーム -->
     <div id="tab-home" class="tab-content active">
       <div class="sidebar-header">ホーム</div>
       <div class="profile-card">
@@ -177,19 +181,19 @@
           <div><button onclick="openProfileModal()" style="background: none; border: none; color: #4a90e2; font-size: 11px; cursor: pointer; margin-top: 4px;">プロフィール・背景設定</button></div>
         </div>
       </div>
-      <div class="section-title">グループ</div>
-      <div class="item-list" id="home-groups-list"></div>
       <div class="section-title">友達リスト</div>
       <div class="item-list" id="home-friends-list"></div>
       <div class="section-title">知り合いかも</div>
       <div class="item-list" id="home-others-list"></div>
     </div>
 
+    <!-- TAB 2: トーク一覧 -->
     <div id="tab-chats" class="tab-content">
       <div class="sidebar-header">トーク</div>
       <div class="item-list" id="chat-threads-list"></div>
     </div>
 
+    <!-- TAB 3: スタンプショップ＆自作 -->
     <div id="tab-shop" class="tab-content">
       <div class="sidebar-header">
         <span>スタンプショップ</span>
@@ -198,43 +202,55 @@
       <div class="stamp-grid" id="stamp-shop-grid"></div>
     </div>
 
+    <!-- TAB 4: ミッション -->
     <div id="tab-missions" class="tab-content">
-      <div class="sidebar-header">🎯 無限ミッション</div>
-      <div class="item-list" id="missions-list"></div>
+      <div class="sidebar-header">🎯 コインミッション</div>
+      <div class="item-list" id="missions-list">
+        <div class="list-item">
+          <div class="item-body">
+            <div class="item-title">プロフィールを設定しよう</div>
+            <div class="item-sub">報酬: 50 コイン</div>
+          </div>
+          <button class="btn-sm btn-add" onclick="claimMission('PROFILE_UPDATE')">受取</button>
+        </div>
+        <div class="list-item">
+          <div class="item-body">
+            <div class="item-title">友達を1人追加しよう</div>
+            <div class="item-sub">報酬: 100 コイン</div>
+          </div>
+          <button class="btn-sm btn-add" onclick="claimMission('FRIEND_ADD')">受取</button>
+        </div>
+        <div class="list-item">
+          <div class="item-body">
+            <div class="item-title">メッセージを10回送信しよう</div>
+            <div class="item-sub">報酬: 150 コイン</div>
+          </div>
+          <button class="btn-sm btn-add" onclick="claimMission('CHAT_10')">受取</button>
+        </div>
+      </div>
     </div>
 
+    <!-- TAB 5: 管理者モード -->
     <div id="tab-admin" class="tab-content">
-      <div class="sidebar-header">👑 管理者パネル</div>
+      <div class="sidebar-header">👑 管理者設定</div>
       <div style="padding: 15px;">
-        
         <div id="admin-login-box">
-          <form onsubmit="event.preventDefault(); submitAdminCode();">
-            <div style="font-size: 12px; margin-bottom: 5px; font-weight: bold;">管理者パスワード入力:</div>
-            <input type="password" id="admin-code-input" placeholder="パスワードを入力" style="width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 4px;">
-            <button type="submit" style="width: 100%; background: #e67e22; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: bold;">ログイン</button>
-          </form>
+          <input type="password" id="admin-code-input" placeholder="パスワード(hamsteromu)" style="width: 100%; padding: 8px; margin-bottom: 8px;">
+          <button onclick="submitAdminCode()" style="width: 100%; background: #e67e22; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold;">ログイン</button>
         </div>
-
         <div id="admin-active-box" style="display: none;">
-          <div style="color: #27ae60; font-weight: bold; font-size: 12px; margin-bottom: 12px;">🔓 管理者権限認証済み</div>
-          <button onclick="openGroupModal()" style="width: 100%; background: #2980b9; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 8px;">👨‍👩‍👧‍👦 グループチャット作成</button>
           <button onclick="openReportChat()" style="width: 100%; background: #8e44ad; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 8px;">📢 通報・報告ルーム</button>
-          <button onclick="openBroadcastPrompt()" style="width: 100%; background: #ff4757; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 15px;">⚡ 全員に一斉アナウンス</button>
-
-          <div class="section-title" style="margin: 0 -15px 5px -15px;">🕵️ 全会話の監視・なりすまし</div>
-          <div class="item-list" id="admin-chat-pairs" style="max-height: 150px; margin: 0 -15px 15px -15px;"></div>
-
-          <div class="section-title" style="margin: 0 -15px 5px -15px;">ユーザー管理 & コイン変更</div>
-          <div class="item-list" id="admin-user-list" style="margin: 0 -15px 15px -15px;"></div>
-
-          <button onclick="logoutAdmin()" style="width: 100%; background: #7f8c8d; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; margin-top: 10px;">ログアウト</button>
+          <button onclick="openBroadcastPrompt()" style="width: 100%; background: #ff4757; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 12px;">⚡ 全員に一斉アナウンス</button>
+          <button onclick="logoutAdmin()" style="width: 100%; background: #7f8c8d; color: white; border: none; padding: 6px; border-radius: 4px; cursor: pointer;">ログアウト</button>
         </div>
-
       </div>
+      <div class="section-title">ユーザー管理 & リアルタイム監視</div>
+      <div class="item-list" id="admin-user-list"></div>
     </div>
 
   </div>
 
+  <!-- 3. メインチャット画面 -->
   <div id="chat-container">
     <div class="chat-header">
       <div class="chat-header-title" id="chat-header-text">トーク相手を選択してください</div>
@@ -245,6 +261,8 @@
     </div>
 
     <div class="message-area" id="message-area"></div>
+
+    <!-- スタンプ選択枠 -->
     <div id="stamp-picker"></div>
 
     <div class="input-area">
@@ -262,46 +280,17 @@
     let myUserId = localStorage.getItem('chat_userid');
     let watchedUserA = null;
     let watchedUserB = null;
-    let currentGroupId = null; // グループトーク用
     let selectedSenderId = null;
     let isAdmin = false;
-    let cachedData = { users: [], groups: [], chatPairs: [], messages: [] };
+    let cachedData = { users: [], chatPairs: [], messages: [] };
     let allStamps = [];
-    let audioContextUnlocked = false;
 
     if (!myUserId) {
       myUserId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
       localStorage.setItem('chat_userid', myUserId);
     }
 
-    function enableAudioAndNotification() {
-      if (!audioContextUnlocked) {
-        audioContextUnlocked = true;
-      }
-      if ("Notification" in window && Notification.permission === "default") {
-        Notification.requestPermission();
-      }
-    }
-
-    function playNotificationSound() {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(587.33, ctx.currentTime);
-        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.3);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.3);
-      } catch(e) {}
-    }
-
     window.onload = () => {
-      enableAudioAndNotification();
       const savedName = localStorage.getItem('chat_username');
       if (savedName) {
         document.getElementById('modal-overlay').style.display = 'none';
@@ -326,15 +315,24 @@
 
     function initUser(name) {
       document.getElementById('my-name-display').innerText = name;
+
       const savedFriends = JSON.parse(localStorage.getItem('chat_friends_' + myUserId) || '[]');
       const savedRequests = JSON.parse(localStorage.getItem('chat_requests_' + myUserId) || '[]');
 
-      socket.emit('register', { userId: myUserId, name: name, savedFriends, savedRequests });
+      socket.emit('register', { 
+        userId: myUserId, 
+        name: name,
+        savedFriends: savedFriends,
+        savedRequests: savedRequests
+      });
     }
 
+    // プロフィール変更
     function openProfileModal() {
       const me = cachedData.users.find(u => u.userId === myUserId);
-      if (me) document.getElementById('edit-name-input').value = me.name;
+      if (me) {
+        document.getElementById('edit-name-input').value = me.name;
+      }
       document.getElementById('profile-modal-overlay').style.display = 'flex';
     }
     function closeProfileModal() { document.getElementById('profile-modal-overlay').style.display = 'none'; }
@@ -344,11 +342,18 @@
       const avatarFile = document.getElementById('edit-avatar-file').files[0];
       const bgFile = document.getElementById('edit-bg-file').files[0];
 
-      const readFiles = async () => {
-        let avatarBase64 = avatarFile ? await toBase64(avatarFile) : undefined;
-        let bgBase64 = bgFile ? await toBase64(bgFile) : undefined;
+      let avatarBase64 = undefined;
+      let bgBase64 = undefined;
 
-        socket.emit('update_profile', { name: newName, avatar: avatarBase64, bgImage: bgBase64 });
+      const readFiles = async () => {
+        if (avatarFile) avatarBase64 = await toBase64(avatarFile);
+        if (bgFile) bgBase64 = await toBase64(bgFile);
+
+        socket.emit('update_profile', {
+          name: newName,
+          avatar: avatarBase64,
+          bgImage: bgBase64
+        });
         closeProfileModal();
       };
       readFiles();
@@ -366,15 +371,16 @@
         localStorage.setItem('chat_username', name);
         document.getElementById('my-name-display').innerText = name;
       }
-      if (bgImage) document.getElementById('chat-container').style.backgroundImage = `url(${bgImage})`;
+      if (bgImage) {
+        document.getElementById('chat-container').style.backgroundImage = `url(${bgImage})`;
+      }
     });
 
+    // 管理者ログイン (パスワード: hamsteromu)
     function submitAdminCode() {
-      const code = document.getElementById('admin-code-input').value.trim();
-      if (!code) return alert('パスワードを入力してください');
-      socket.emit('admin_auth', { code });
+      const code = document.getElementById('admin-code-input').value;
+      socket.emit('admin_auth', { code: code });
     }
-
     function logoutAdmin() { socket.emit('admin_logout'); }
 
     socket.on('admin_auth_result', ({ success }) => {
@@ -382,6 +388,7 @@
         isAdmin = true;
         document.getElementById('admin-login-box').style.display = 'none';
         document.getElementById('admin-active-box').style.display = 'block';
+        document.getElementById('nav-admin-btn').style.display = 'flex';
         updateUI();
         alert('👑 管理者モードでログインしました');
       } else {
@@ -393,8 +400,9 @@
       isAdmin = false;
       document.getElementById('admin-login-box').style.display = 'block';
       document.getElementById('admin-active-box').style.display = 'none';
+      document.getElementById('nav-admin-btn').style.display = 'none';
       document.getElementById('impersonate-bar').style.display = 'none';
-      document.getElementById('admin-code-input').value = '';
+      switchTab('tab-home', document.querySelector('.nav-item'));
       updateUI();
     });
 
@@ -418,48 +426,23 @@
 
     function updateUI() {
       const me = cachedData.users.find(u => u.userId === myUserId);
-      const groupsList = document.getElementById('home-groups-list');
       const friendsList = document.getElementById('home-friends-list');
       const othersList = document.getElementById('home-others-list');
       const chatThreadsList = document.getElementById('chat-threads-list');
 
-      groupsList.innerHTML = '';
       friendsList.innerHTML = '';
       othersList.innerHTML = '';
       chatThreadsList.innerHTML = '';
 
-      // グループ一覧のレンダリング
-      if (cachedData.groups) {
-        cachedData.groups.forEach(group => {
-          // メンバー指定がある場合は自分が参加している場合のみ表示
-          if (group.members && group.members.length > 0 && !group.members.includes(myUserId) && !isAdmin) return;
-
-          const gItem = document.createElement('div');
-          gItem.className = 'list-item';
-          gItem.innerHTML = `
-            <div class="avatar" style="background:#2980b9;">👨‍👩‍👧‍👦</div>
-            <div class="item-body">
-              <div class="item-title">${group.name}</div>
-              <div class="item-sub">グループチャット</div>
-            </div>
-          `;
-          gItem.onclick = () => selectGroup(group.id, group.name);
-          groupsList.appendChild(gItem);
-
-          const threadGItem = gItem.cloneNode(true);
-          threadGItem.onclick = () => selectGroup(group.id, group.name);
-          chatThreadsList.appendChild(threadGItem);
-        });
-      }
-
-      // ユーザー一覧のレンダリング
       cachedData.users.forEach(user => {
         if (user.userId === myUserId) return;
+
         const isFriend = me && me.friends.includes(user.userId);
         const hasSentRequest = me && me.requestsSent.includes(user.userId);
 
         const item = document.createElement('div');
         item.className = 'list-item';
+
         const avatarStyle = user.avatar ? `background-image: url(${user.avatar});` : '';
         item.innerHTML = `
           <div class="avatar ${user.isOnline ? 'online' : ''}" style="${avatarStyle}">${user.avatar ? '' : user.name.charAt(0)}</div>
@@ -475,10 +458,19 @@
 
           const threadItem = item.cloneNode(true);
           threadItem.onclick = () => selectPartner(user.userId, user.name);
+          const lastMsg = cachedData.messages.filter(m => 
+            (m.fromUserId === myUserId && m.toUserId === user.userId) ||
+            (m.fromUserId === user.userId && m.toUserId === myUserId)
+          ).pop();
+
+          if (lastMsg) {
+            threadItem.querySelector('.item-sub').innerText = lastMsg.stampUrl ? '[スタンプ]' : (lastMsg.text || '[ファイル]');
+          }
           chatThreadsList.appendChild(threadItem);
+
         } else {
           const btn = document.createElement('button');
-          btn.className = `btn-sm ${hasSentRequest ? 'btn-disabled' : 'btn-add'}`;
+          btn.className = `btn-sm ${hasSentRequest ? 'btn-pending' : 'btn-add'}`;
           btn.innerText = hasSentRequest ? '申請中' : '追加';
           if (!hasSentRequest) {
             btn.onclick = (e) => {
@@ -491,136 +483,47 @@
         }
       });
 
+      // 👑 管理者用ユーザーリスト
       if (isAdmin) {
         const adminUserList = document.getElementById('admin-user-list');
         adminUserList.innerHTML = '';
-
-        cachedData.users.forEach(user => {
+        
+        cachedData.chatPairs.forEach(pair => {
           const item = document.createElement('div');
           item.className = 'list-item';
-          item.style.flexDirection = 'column';
-          item.style.alignItems = 'flex-start';
-
           item.innerHTML = `
-            <div style="display:flex; width:100%; justify-content:space-between; align-items:center;">
-              <span style="font-weight:bold;">${user.name} (${user.userId === myUserId ? '自分' : 'ユーザー'})</span>
-              <span style="font-size:11px; color:#e67e22;">現在: 💰${user.coins}</span>
-            </div>
-            <div style="display:flex; gap:5px; width:100%; margin-top:5px;">
-              <input type="number" id="coin-input-${user.userId}" value="${user.coins}" style="flex:1; padding:4px; font-size:12px; border:1px solid #ccc; border-radius:4px;">
-              <button class="btn-sm btn-add" onclick="setCoins('${user.userId}')">コイン変更</button>
-              <button class="btn-sm" style="background:#e74c3c; color:white;" onclick="adminBanUser('${user.userId}')">BAN</button>
+            <div class="avatar">👁️</div>
+            <div class="item-body">
+              <div class="item-title">${pair.userA.name} ↔ ${pair.userB.name}</div>
+              <div class="item-sub">クリックで監視＆なりすまし送信</div>
             </div>
           `;
+          item.onclick = () => watchPair(pair.userA, pair.userB);
           adminUserList.appendChild(item);
         });
 
-        const pairContainer = document.getElementById('admin-chat-pairs');
-        pairContainer.innerHTML = '';
-        if (cachedData.chatPairs && cachedData.chatPairs.length > 0) {
-          cachedData.chatPairs.forEach(pair => {
-            const pairItem = document.createElement('div');
-            pairItem.className = 'list-item';
-            pairItem.innerHTML = `
-              <div class="item-body">
-                <div class="item-title">💬 ${pair.userA.name} ✕ ${pair.userB.name}</div>
-                <div class="item-sub">監視・代理送信を行う</div>
-              </div>
-            `;
-            pairItem.onclick = () => inspectPair(pair.userA.userId, pair.userB.userId, pair.userA.name, pair.userB.name);
-            pairContainer.appendChild(pairItem);
-          });
-        } else {
-          pairContainer.innerHTML = '<div style="padding:10px; font-size:12px; color:#999;">会話中のペアはありません</div>';
-        }
+        cachedData.users.forEach(user => {
+          if (user.userId === myUserId) return;
+          const item = document.createElement('div');
+          item.className = 'list-item';
+          item.innerHTML = `
+            <div class="avatar">${user.name.charAt(0)}</div>
+            <div class="item-body">
+              <div class="item-title">${user.name} ${user.isBanned ? '⛔ (BAN中)' : ''}</div>
+              <div class="item-sub">コイン: ${user.coins}</div>
+            </div>
+            <button class="btn-sm" style="background:#e74c3c; color:white; margin-right:4px;" onclick="adminBanUser('${user.userId}')">BAN</button>
+            <button class="btn-sm" style="background:#3498db; color:white;" onclick="adminRenameUser('${user.userId}')">名変</button>
+          `;
+          adminUserList.appendChild(item);
+        });
       }
 
-      renderMissions();
       renderStampShop();
       renderStampPicker();
     }
 
-    function openGroupModal() {
-      const container = document.getElementById('group-user-checkboxes');
-      container.innerHTML = '';
-      cachedData.users.forEach(u => {
-        if (u.userId === myUserId) return;
-        const label = document.createElement('label');
-        label.style.display = 'block';
-        label.style.fontSize = '12px';
-        label.style.marginBottom = '3px';
-        label.innerHTML = `<input type="checkbox" value="${u.userId}" class="group-user-chk"> ${u.name}`;
-        container.appendChild(label);
-      });
-      document.getElementById('create-group-modal').style.display = 'flex';
-    }
-
-    function closeGroupModal() {
-      document.getElementById('create-group-modal').style.display = 'none';
-    }
-
-    function submitCreateGroup() {
-      const name = document.getElementById('group-name-input').value.trim();
-      if (!name) return alert('グループ名を入力してください');
-
-      const checked = Array.from(document.querySelectorAll('.group-user-chk:checked')).map(c => c.value);
-      if (checked.length > 0) checked.push(myUserId); // 自分も含める
-
-      socket.emit('admin_create_group', { groupName: name, memberUserIds: checked });
-      closeGroupModal();
-    }
-
-    function inspectPair(userAId, userBId, nameA, nameB) {
-      currentGroupId = null;
-      watchedUserA = userAId;
-      watchedUserB = userBId;
-      selectedSenderId = userAId;
-
-      document.getElementById('chat-header-text').innerText = `🕵️ 監視中: ${nameA} ✕ ${nameB}`;
-      
-      const impBar = document.getElementById('impersonate-bar');
-      const btnGroup = document.getElementById('impersonate-btn-group');
-      impBar.style.display = 'flex';
-      btnGroup.innerHTML = `
-        <button class="imp-user-btn active" id="btn-imp-${userAId}" onclick="switchSender('${userAId}')">${nameA} として送信</button>
-        <button class="imp-user-btn" id="btn-imp-${userBId}" onclick="switchSender('${userBId}')">${nameB} として送信</button>
-      `;
-
-      socket.emit('get_chat_history', { userA: userAId, userB: userBId });
-    }
-
-    function switchSender(senderId) {
-      selectedSenderId = senderId;
-      document.querySelectorAll('.imp-user-btn').forEach(btn => btn.classList.remove('active'));
-      const activeBtn = document.getElementById(`btn-imp-${senderId}`);
-      if (activeBtn) activeBtn.classList.add('active');
-    }
-
-    function renderMissions() {
-      const me = cachedData.users.find(u => u.userId === myUserId);
-      const list = document.getElementById('missions-list');
-      if (!list || !me || !me.missions) return;
-      list.innerHTML = '';
-
-      me.missions.forEach(m => {
-        const isReady = m.current >= m.goal;
-        const item = document.createElement('div');
-        item.className = 'list-item';
-        item.innerHTML = `
-          <div class="item-body">
-            <div class="item-title">${m.title} (${m.current}/${m.goal})</div>
-            <div class="item-sub">報酬: 💰 ${m.reward} コイン</div>
-          </div>
-          <button class="btn-sm ${isReady ? 'btn-add' : 'btn-disabled'}" ${isReady ? '' : 'disabled'} onclick="claimMission('${m.id}')">
-            ${isReady ? '受取' : '未達成'}
-          </button>
-        `;
-        list.appendChild(item);
-      });
-    }
-
     function selectPartner(partnerId, partnerName) {
-      currentGroupId = null;
       watchedUserA = myUserId;
       watchedUserB = partnerId;
       selectedSenderId = myUserId;
@@ -629,24 +532,37 @@
       document.getElementById('impersonate-bar').style.display = 'none';
       document.getElementById('message-area').innerHTML = '';
 
-      socket.emit('get_chat_history', { partnerId });
+      socket.emit('get_chat_history', { partnerId: partnerId });
     }
 
-    function selectGroup(groupId, groupName) {
-      currentGroupId = groupId;
-      watchedUserA = myUserId;
-      watchedUserB = null;
-      selectedSenderId = myUserId;
+    function watchPair(userA, userB) {
+      watchedUserA = userA.userId;
+      watchedUserB = userB.userId;
 
-      document.getElementById('chat-header-text').innerText = `👨‍👩‍👧‍👦 ${groupName}`;
-      document.getElementById('impersonate-bar').style.display = 'none';
+      document.getElementById('chat-header-text').innerText = `👁️ 監視中: ${userA.name} ↔ ${userB.name}`;
+      const impBar = document.getElementById('impersonate-bar');
+      const btnGroup = document.getElementById('impersonate-btn-group');
+      impBar.style.display = 'flex';
+      btnGroup.innerHTML = '';
+
+      [userA, userB].forEach(u => {
+        const btn = document.createElement('button');
+        btn.className = 'imp-user-btn';
+        btn.innerText = u.name;
+        btn.onclick = () => {
+          selectedSenderId = u.userId;
+          document.querySelectorAll('.imp-user-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        };
+        btnGroup.appendChild(btn);
+      });
+
+      btnGroup.firstChild.click();
       document.getElementById('message-area').innerHTML = '';
-
-      socket.emit('get_chat_history', { groupId });
+      socket.emit('get_chat_history', { userA: userA.userId, userB: userB.userId });
     }
 
     function openReportChat() {
-      currentGroupId = null;
       watchedUserA = myUserId;
       watchedUserB = 'ADMIN_REPORT_ROOM';
       selectedSenderId = myUserId;
@@ -658,13 +574,13 @@
       socket.emit('get_chat_history', { partnerId: 'ADMIN_REPORT_ROOM' });
     }
 
-    socket.on('chat_history', ({ partnerId, groupId, messages }) => {
+    socket.on('chat_history', ({ partnerId, messages }) => {
       const messageArea = document.getElementById('message-area');
       messageArea.innerHTML = '';
       messages.forEach(msg => renderMessage(msg));
       messageArea.scrollTop = messageArea.scrollHeight;
 
-      if (partnerId && partnerId !== 'ADMIN_REPORT_ROOM') {
+      if (partnerId !== 'ADMIN_REPORT_ROOM') {
         socket.emit('mark_as_read', { partnerId: watchedUserB, watchedUserA });
       }
     });
@@ -672,65 +588,47 @@
     function sendText() {
       const input = document.getElementById('text-input');
       const text = input.value;
-      if (!text || (!watchedUserB && !currentGroupId)) return;
+      if (!text || !watchedUserB) return;
 
-      const toUserId = currentGroupId ? null : ((watchedUserB === 'ADMIN_REPORT_ROOM') ? 'ADMIN_REPORT_ROOM' : ((selectedSenderId === watchedUserA) ? watchedUserB : watchedUserA));
+      const toUserId = (watchedUserB === 'ADMIN_REPORT_ROOM') ? 'ADMIN_REPORT_ROOM' : ((selectedSenderId === watchedUserA) ? watchedUserB : watchedUserA);
       const impersonateUserId = (isAdmin && selectedSenderId !== myUserId && watchedUserB !== 'ADMIN_REPORT_ROOM') ? selectedSenderId : null;
 
-      socket.emit('send_message', { toUserId, toGroupId: currentGroupId, text, file: null, stampUrl: null, impersonateUserId });
+      socket.emit('send_message', { toUserId, text, file: null, stampUrl: null, impersonateUserId });
       input.value = '';
     }
 
     function sendStamp(stampUrl) {
-      if (!watchedUserB && !currentGroupId) return alert('トーク相手を選択してください');
-      const toUserId = currentGroupId ? null : ((watchedUserB === 'ADMIN_REPORT_ROOM') ? 'ADMIN_REPORT_ROOM' : ((selectedSenderId === watchedUserA) ? watchedUserB : watchedUserA));
+      if (!watchedUserB) return alert('トーク相手を選択してください');
+      const toUserId = (watchedUserB === 'ADMIN_REPORT_ROOM') ? 'ADMIN_REPORT_ROOM' : ((selectedSenderId === watchedUserA) ? watchedUserB : watchedUserA);
       const impersonateUserId = (isAdmin && selectedSenderId !== myUserId && watchedUserB !== 'ADMIN_REPORT_ROOM') ? selectedSenderId : null;
 
-      socket.emit('send_message', { toUserId, toGroupId: currentGroupId, text: '', file: null, stampUrl, impersonateUserId });
+      socket.emit('send_message', { toUserId, text: '', file: null, stampUrl, impersonateUserId });
       document.getElementById('stamp-picker').style.display = 'none';
     }
 
     function sendFile() {
       const fileInput = document.getElementById('file-input');
       const file = fileInput.files[0];
-      if (!file || (!watchedUserB && !currentGroupId)) return;
+      if (!file || !watchedUserB) return;
 
-      const toUserId = currentGroupId ? null : ((watchedUserB === 'ADMIN_REPORT_ROOM') ? 'ADMIN_REPORT_ROOM' : ((selectedSenderId === watchedUserA) ? watchedUserB : watchedUserA));
+      const toUserId = (watchedUserB === 'ADMIN_REPORT_ROOM') ? 'ADMIN_REPORT_ROOM' : ((selectedSenderId === watchedUserA) ? watchedUserB : watchedUserA);
       const impersonateUserId = (isAdmin && selectedSenderId !== myUserId && watchedUserB !== 'ADMIN_REPORT_ROOM') ? selectedSenderId : null;
 
       const reader = new FileReader();
       reader.onload = function(e) {
-        socket.emit('send_message', { toUserId, toGroupId: currentGroupId, text: '', file: { name: file.name, type: file.type, data: e.target.result }, stampUrl: null, impersonateUserId });
+        socket.emit('send_message', { toUserId, text: '', file: { name: file.name, type: file.type, data: e.target.result }, stampUrl: null, impersonateUserId });
         fileInput.value = '';
       };
       reader.readAsDataURL(file);
     }
 
-    // ★ 通知バグ修正（自分宛て・参加グループ宛てのみ通知音＆ポップアップを発火）
     socket.on('receive_message', (msg) => {
-      const isForMe = (msg.toUserId === myUserId) || 
-                      (msg.toGroupId && cachedData.groups.some(g => g.id === msg.toGroupId && (!g.members || g.members.length === 0 || g.members.includes(myUserId))));
-
-      if (msg.fromUserId !== myUserId && isForMe) {
-        playNotificationSound();
-        if ("Notification" in window && Notification.permission === "granted") {
-          const n = new Notification(`💬 ${msg.fromName}`, {
-            body: msg.text || (msg.stampUrl ? '【スタンプが届きました】' : '【ファイルが届きました】'),
-            icon: msg.fromAvatar || undefined,
-            tag: msg.id
-          });
-          n.onclick = () => {
-            window.focus();
-          };
-        }
-      }
-
-      // チャット画面描画処理
-      const isCurrentPair = (currentGroupId && msg.toGroupId === currentGroupId) ||
-                            (watchedUserB === 'ADMIN_REPORT_ROOM' && msg.toUserId === 'ADMIN_REPORT_ROOM') ||
-                            (!currentGroupId && ((msg.fromUserId === watchedUserA && msg.toUserId === watchedUserB) || (msg.fromUserId === watchedUserB && msg.toUserId === watchedUserA)));
+      const isCurrentPair = (watchedUserB === 'ADMIN_REPORT_ROOM' && msg.toUserId === 'ADMIN_REPORT_ROOM') ||
+                          (msg.fromUserId === watchedUserA && msg.toUserId === watchedUserB) ||
+                          (msg.fromUserId === watchedUserB && msg.toUserId === watchedUserA);
 
       if (!isCurrentPair) return;
+
       renderMessage(msg);
       const messageArea = document.getElementById('message-area');
       messageArea.scrollTop = messageArea.scrollHeight;
@@ -743,7 +641,7 @@
       const row = document.createElement('div');
       row.className = `msg-row ${isRightSide ? 'me' : 'other'}`;
 
-      if (!isRightSide || watchedUserB === 'ADMIN_REPORT_ROOM' || currentGroupId) {
+      if (!isRightSide || watchedUserB === 'ADMIN_REPORT_ROOM') {
         const sender = document.createElement('div');
         sender.className = 'msg-sender';
         sender.innerText = msg.fromName;
@@ -752,6 +650,7 @@
 
       const body = document.createElement('div');
       body.className = 'msg-body';
+
       const bubble = document.createElement('div');
 
       if (msg.stampUrl) {
@@ -780,8 +679,10 @@
 
       const meta = document.createElement('div');
       meta.className = 'msg-meta';
-      if (isRightSide && msg.read && watchedUserB !== 'ADMIN_REPORT_ROOM' && !currentGroupId) {
+
+      if (isRightSide && msg.read && watchedUserB !== 'ADMIN_REPORT_ROOM') {
         const readSpan = document.createElement('span');
+        readSpan.className = 'read-status';
         readSpan.innerText = '既読';
         meta.appendChild(readSpan);
       }
@@ -793,15 +694,17 @@
       body.appendChild(bubble);
       body.appendChild(meta);
       row.appendChild(body);
+
       messageArea.appendChild(row);
     }
 
+    // スタンプ画面処理
     function openStampModal() { document.getElementById('create-stamp-modal').style.display = 'flex'; }
     function closeStampModal() { document.getElementById('create-stamp-modal').style.display = 'none'; }
 
     async function submitNewStamp() {
       const name = document.getElementById('stamp-name-input').value.trim();
-      const price = Math.max(0, parseInt(document.getElementById('stamp-price-input').value) || 0);
+      const price = document.getElementById('stamp-price-input').value;
       const file = document.getElementById('stamp-image-file').files[0];
 
       if (!name || !file) return alert('スタンプ名と画像を選択してください');
@@ -825,7 +728,7 @@
           <img src="${stamp.imageUrl}">
           <div style="font-size:12px; font-weight:bold;">${stamp.name}</div>
           <div style="font-size:11px; color:#e67e22; margin: 3px 0;">💰 ${stamp.price}</div>
-          <button class="btn-sm ${isOwned ? 'btn-disabled' : 'btn-add'}" style="width:100%;" ${isOwned ? 'disabled' : ''} onclick="buyStamp('${stamp.id}')">
+          <button class="btn-sm ${isOwned ? 'btn-pending' : 'btn-add'}" style="width:100%;" ${isOwned ? 'disabled' : ''} onclick="buyStamp('${stamp.id}')">
             ${isOwned ? '所有済み' : '購入'}
           </button>
         `;
@@ -834,17 +737,7 @@
     }
 
     function buyStamp(stampId) {
-      const stamp = allStamps.find(s => s.id === stampId);
-      if (!stamp) return;
-      const me = cachedData.users.find(u => u.userId === myUserId);
-      
-      if (me && (me.coins || 0) < stamp.price) {
-        return alert(`コインが足りません！（必要: ${stamp.price} コイン / 所持: ${me.coins || 0} コイン）`);
-      }
-
-      if (confirm(`スタンプ「${stamp.name}」を ${stamp.price} コインで購入しますか？`)) {
-        socket.emit('buy_stamp', stampId);
-      }
+      socket.emit('buy_stamp', stampId);
     }
 
     function toggleStampPicker() {
@@ -871,42 +764,35 @@
       }
     }
 
-    function claimMission(missionId) { socket.emit('claim_mission', missionId); }
-
-    function setCoins(targetUserId) {
-      const amount = document.getElementById(`coin-input-${targetUserId}`).value;
-      socket.emit('admin_set_coins', { targetUserId, amount });
+    function claimMission(missionId) {
+      socket.emit('claim_mission', missionId);
     }
 
+    // 管理者アクション
     function adminBanUser(targetUserId) {
       const mins = prompt('何分間BANしますか？', '60');
       if (mins) socket.emit('admin_ban_user', { targetUserId, minutes: parseInt(mins) });
     }
 
+    function adminRenameUser(targetUserId) {
+      const newName = prompt('新しい名前を入力してください:');
+      if (newName) socket.emit('admin_rename_user', { targetUserId, newName });
+    }
+
+    // アナウンス
     function openBroadcastPrompt() {
       const msg = prompt('全員に送信するアナウンスを入力してください:');
-      if (msg) socket.emit('admin_broadcast_alert', { message: msg });
+      if (msg) socket.emit('admin_broadcast_alert', { message: msg, playSound: true });
     }
 
     socket.on('receive_broadcast_alert', ({ title, message }) => {
       document.getElementById('alert-title').innerText = title;
       document.getElementById('alert-body').innerText = message;
       document.getElementById('alert-modal-overlay').style.display = 'flex';
-
-      playNotificationSound();
-
-      if ("Notification" in window && Notification.permission === "granted") {
-        const alertNav = new Notification(title, {
-          body: message,
-          tag: 'admin_broadcast_' + Date.now()
-        });
-        alertNav.onclick = () => {
-          window.focus();
-        };
-      }
     });
 
     function closeAlertModal() { document.getElementById('alert-modal-overlay').style.display = 'none'; }
+
     socket.on('system_alert', (msg) => alert(msg));
     socket.on('error_message', (msg) => alert(msg));
   </script>
